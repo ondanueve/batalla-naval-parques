@@ -33,11 +33,9 @@ let state = {
   currentPlayer: "arg",
   boards: { arg: null, inv: null },
   powers: { radar: 2, bomb: 1, camo: 2 },
-  placing: { shipIndex: 0, horizontal: true },
   peer: null,
   conn: null,
-  isHost: false,
-  roomId: null
+  isHost: false
 };
 
 const ownCanvas = document.getElementById("own-board");
@@ -89,8 +87,9 @@ function placeUnit(board, x, y, size, horizontal, unitId) {
 }
 
 function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agua") {
-  const cell = 40;
-  ctx.clearRect(0, 0, 400, 400);
+  const size = ctx.canvas.width;
+  const cell = size / GRID;
+  ctx.clearRect(0, 0, size, size);
   if (terrain === "agua") {
     if (map === "nahuel") ctx.fillStyle = "#38bdf8";
     else if (map === "iguazu") ctx.fillStyle = "#22c55e";
@@ -102,7 +101,7 @@ function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agu
   } else {
     ctx.fillStyle = "#64748b";
   }
-  ctx.fillRect(0, 0, 400, 400);
+  ctx.fillRect(0, 0, size, size);
 
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
@@ -112,17 +111,17 @@ function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agu
       ctx.strokeRect(x * cell, y * cell, cell, cell);
       if (showUnits && cellData.unit !== null) {
         ctx.fillStyle = terrain === "tierra" ? "#78350f" : "#1e3a8a";
-        ctx.fillRect(x * cell + 2, y * cell + 2, cell - 4, cell - 4);
+        ctx.fillRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2);
       }
       if (cellData.hit) {
         ctx.fillStyle = "#ef4444";
         ctx.beginPath();
-        ctx.arc(x * cell + 20, y * cell + 20, 12, 0, Math.PI * 2);
+        ctx.arc(x * cell + cell/2, y * cell + cell/2, cell * 0.3, 0, Math.PI * 2);
         ctx.fill();
       } else if (cellData.miss) {
         ctx.fillStyle = "#94a3b8";
         ctx.beginPath();
-        ctx.arc(x * cell + 20, y * cell + 20, 8, 0, Math.PI * 2);
+        ctx.arc(x * cell + cell/2, y * cell + cell/2, cell * 0.2, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -130,6 +129,7 @@ function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agu
 }
 
 function shoot(board, x, y) {
+  if (x < 0 || y < 0 || x >= GRID || y >= GRID) return null;
   if (board[y][x].hit || board[y][x].miss) return null;
   if (board[y][x].unit !== null) {
     board[y][x].hit = true;
@@ -185,18 +185,18 @@ document.getElementById("start-btn").onclick = startGame;
 document.getElementById("back-btn").onclick = () => {
   document.getElementById("game").classList.add("hidden");
   document.getElementById("menu").classList.remove("hidden");
-  if (state.peer) state.peer.destroy();
+  if (state.peer) try { state.peer.destroy(); } catch(e){}
 };
 
 document.getElementById("copy-link").onclick = () => {
   const input = document.getElementById("invite-link");
   input.select();
-  navigator.clipboard.writeText(input.value);
-  alert("Enlace copiado");
+  navigator.clipboard.writeText(input.value).then(() => alert("Enlace copiado"));
 };
 
 function startGame() {
   state.invader = document.getElementById("invader").value;
+  if (window.ArcadeAudio && window.ArcadeAudio.startJuke) window.ArcadeAudio.startJuke();
   if (state.mode === "pvp") {
     setupPvP();
     return;
@@ -206,8 +206,8 @@ function startGame() {
 
 function setupPvP() {
   state.isHost = true;
-  state.roomId = Math.random().toString(36).slice(2, 8);
-  state.peer = new Peer(state.roomId);
+  const roomId = Math.random().toString(36).slice(2, 8);
+  state.peer = new Peer(roomId);
   state.peer.on("open", id => {
     const link = window.location.origin + window.location.pathname + "?room=" + id;
     document.getElementById("invite-link").value = link;
@@ -218,14 +218,18 @@ function setupPvP() {
     state.conn = conn;
     setupConnection();
     document.getElementById("waiting").textContent = "¡Rival conectado!";
-    setTimeout(beginLocalGame, 500);
+    setTimeout(beginLocalGame, 600);
+  });
+  state.peer.on("error", err => {
+    console.error(err);
+    document.getElementById("waiting").textContent = "Error de conexión. Probá de nuevo.";
   });
 }
 
 function setupConnection() {
   state.conn.on("data", data => {
     if (data.type === "shot") {
-      const result = shoot(state.boards.arg, data.x, data.y);
+      shoot(state.boards.arg, data.x, data.y);
       drawAll();
       if (checkWin(state.boards.arg)) alert("El invasor gana");
     }
@@ -237,13 +241,14 @@ function beginLocalGame() {
   document.getElementById("game").classList.remove("hidden");
   document.body.className = `map-${state.map}`;
   state.phase = "battle";
+  state.currentPlayer = "arg";
   state.boards.arg = createBoard();
   state.boards.inv = createBoard();
   placeUnitsRandom(state.boards.inv);
   if (state.mode === "pvc") placeUnitsRandom(state.boards.arg);
   updateUI();
   drawAll();
-  document.getElementById("message").textContent = "¡A batallar!";
+  document.getElementById("message").textContent = "¡A batallar! Tocá el tablero enemigo";
 }
 
 function drawAll() {
@@ -251,29 +256,20 @@ function drawAll() {
   drawBoard(enemyCtx, state.boards.inv, false, state.map, state.terrain);
 }
 
-enemyCanvas.addEventListener("click", onEnemyClick);
-enemyCanvas.addEventListener("touchend", e => {
-  e.preventDefault();
-  const touch = e.changedTouches[0];
-  const rect = enemyCanvas.getBoundingClientRect();
-  const x = Math.floor((touch.clientX - rect.left) / (rect.width / GRID));
-  const y = Math.floor((touch.clientY - rect.top) / (rect.height / GRID));
-  handleShot(x, y);
-});
-
-function onEnemyClick(e) {
-  const rect = enemyCanvas.getBoundingClientRect();
-  const x = Math.floor((e.clientX - rect.left) / (rect.width / GRID));
-  const y = Math.floor((e.clientY - rect.top) / (rect.height / GRID));
-  handleShot(x, y);
+function getCellFromEvent(e, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.clientX || (e.changedTouches && e.changedTouches[0].clientX);
+  const clientY = e.clientY || (e.changedTouches && e.changedTouches[0].clientY);
+  const x = Math.floor((clientX - rect.left) / (rect.width / GRID));
+  const y = Math.floor((clientY - rect.top) / (rect.height / GRID));
+  return { x, y };
 }
 
 function handleShot(x, y) {
   if (state.phase !== "battle" || state.currentPlayer !== "arg") return;
-  if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
   const result = shoot(state.boards.inv, x, y);
   if (!result) return;
-  document.getElementById("message").textContent = result === "hit" ? "¡Impacto!" : "Agua/Tierra vacía...";
+  document.getElementById("message").textContent = result === "hit" ? "¡Impacto!" : "Vacío...";
   if (state.conn) state.conn.send({ type: "shot", x, y });
   if (checkWin(state.boards.inv)) {
     alert("¡Argentina gana!");
@@ -282,9 +278,20 @@ function handleShot(x, y) {
   drawAll();
   if (state.mode === "pvc") {
     state.currentPlayer = "inv";
-    setTimeout(aiTurn, 800);
+    updateUI();
+    setTimeout(aiTurn, 700);
   }
 }
+
+enemyCanvas.addEventListener("click", e => {
+  const { x, y } = getCellFromEvent(e, enemyCanvas);
+  handleShot(x, y);
+});
+enemyCanvas.addEventListener("touchend", e => {
+  e.preventDefault();
+  const { x, y } = getCellFromEvent(e, enemyCanvas);
+  handleShot(x, y);
+});
 
 function aiTurn() {
   if (state.mode !== "pvc") return;
@@ -302,10 +309,10 @@ function aiTurn() {
 }
 
 function updateUI() {
-  document.getElementById("turn-indicator").textContent = state.currentPlayer === "arg" ? "Turno de Argentina 🇦🇷" : "Turno del Invasor";
+  document.getElementById("turn-indicator").textContent = state.currentPlayer === "arg" ? "Turno 🇦🇷" : "Turno Invasor";
 }
 
-// Powers stubs
+// Powers
 document.getElementById("power-radar").onclick = () => {
   if (state.powers.radar <= 0) return;
   state.powers.radar--;
@@ -314,18 +321,19 @@ document.getElementById("power-radar").onclick = () => {
 document.getElementById("power-bomb").onclick = () => {
   if (state.powers.bomb <= 0) return;
   state.powers.bomb--;
-  document.getElementById("message").textContent = "¡Bomba de área!";
+  document.getElementById("message").textContent = "¡Bomba!";
 };
 document.getElementById("power-camo").onclick = () => {
   if (state.powers.camo <= 0) return;
   state.powers.camo--;
-  document.getElementById("message").textContent = "Camuflaje activado";
+  document.getElementById("message").textContent = "Camuflaje";
 };
 
-// Jukebox
+// Jukebox panel
 document.getElementById("juke-btn").onclick = () => {
   document.getElementById("juke-panel").classList.remove("hidden");
   populateSongs();
+  if (window.ArcadeAudio && window.ArcadeAudio.startJuke) window.ArcadeAudio.startJuke();
 };
 document.getElementById("close-juke").onclick = () => document.getElementById("juke-panel").classList.add("hidden");
 document.getElementById("play-juke").onclick = () => {
@@ -365,6 +373,7 @@ if (params.has("room")) {
       setupConnection();
       beginLocalGame();
     });
+    state.conn.on("error", () => alert("No se pudo conectar al host"));
   });
 }
 
