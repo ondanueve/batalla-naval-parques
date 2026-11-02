@@ -2,7 +2,7 @@
 (() => {
   let ctx = null;
   let jukeOn = false;
-  let jukeVol = 0.8;
+  let jukeVol = 0.25; // volumen bajito por defecto
   let jukeGainNode = null;
   let jukeSrc = null;
   let jukeBuf = null;
@@ -11,6 +11,10 @@
   let abcWant = false;
   let abcId = "bonny";
   let jukeGen = 0;
+  let shuffle = true;
+  let repeat = true;
+  let playlist = [];
+  let playlistIndex = 0;
 
   function unlock() {
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -46,6 +50,17 @@
     ode: tune("ode", "Ode to Joy", ODE_ABC)
   };
 
+  function buildPlaylist() {
+    playlist = Object.keys(SONGS);
+    if (shuffle) {
+      for (let i = playlist.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [playlist[i], playlist[j]] = [playlist[j], playlist[i]];
+      }
+    }
+    playlistIndex = 0;
+  }
+
   function jukeDest() {
     if (!ctx) return null;
     if (!jukeGainNode) {
@@ -54,6 +69,21 @@
     }
     jukeGainNode.gain.value = jukeVol;
     return jukeGainNode;
+  }
+
+  async function playNext() {
+    if (!playlist.length) buildPlaylist();
+    if (playlistIndex >= playlist.length) {
+      if (repeat) {
+        if (shuffle) buildPlaylist();
+        else playlistIndex = 0;
+      } else {
+        jukeOn = false;
+        return;
+      }
+    }
+    const id = playlist[playlistIndex++];
+    await jukePlay(id);
   }
 
   async function jukePlay(id) {
@@ -72,8 +102,13 @@
       await synth.init({ visualObj: vis[0], audioContext: ctx });
       await synth.prime();
       if (gen !== jukeGen) return;
+      if (abcSynth && abcSynth.stop) try { abcSynth.stop(); } catch (e) {}
       abcSynth = synth;
       synth.start();
+      // Auto next when finished (approximate with timeout for short tunes)
+      setTimeout(() => {
+        if (jukeOn && abcWant && gen === jukeGen) playNext();
+      }, 12000);
     } catch (e) {
       console.warn("Juke error", e);
       jukeOn = false;
@@ -95,7 +130,9 @@
     jukeStop,
     jukePlaying: () => jukeOn,
     setJukeVolume: (v) => { jukeVol = Math.max(0, Math.min(1, v)); if (jukeGainNode) jukeGainNode.gain.value = jukeVol; },
-    jukeVolume: () => jukeVol
+    jukeVolume: () => jukeVol,
+    setShuffle: (v) => { shuffle = !!v; },
+    setRepeat: (v) => { repeat = !!v; }
   };
 
   // Silent hold for ABC render
@@ -105,4 +142,24 @@
     el.hidden = true;
     document.body.appendChild(el);
   }
+
+  // Auto-start on with shuffle + repeat + low volume
+  function autoStart() {
+    buildPlaylist();
+    jukeVol = 0.25;
+    playNext();
+  }
+
+  // Start after user interaction or on load (browsers require gesture for audio)
+  document.addEventListener("click", () => {
+    if (!jukeOn) autoStart();
+  }, { once: true });
+  document.addEventListener("touchstart", () => {
+    if (!jukeOn) autoStart();
+  }, { once: true });
+
+  // Try auto after a short delay too
+  setTimeout(() => {
+    if (!jukeOn) autoStart();
+  }, 1500);
 })();
