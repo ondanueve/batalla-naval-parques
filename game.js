@@ -1,5 +1,6 @@
 // Parques en Guerra - game.js
-const GRID = 10;
+const GRID_W = 10;
+const GRID_H = 20;
 const UNITS = {
   agua: [
     { name: "Portaaviones", size: 5 },
@@ -33,7 +34,7 @@ let state = {
   currentPlayer: "arg",
   boards: { arg: null, inv: null },
   powers: { radar: 2, bomb: 1, camo: 2 },
-  selectedUnit: null, // { id, size, horizontal, cells: [{x,y}] }
+  selectedUnit: null,
   peer: null,
   conn: null,
   placeTimer: null
@@ -49,8 +50,8 @@ function getUnits() {
 }
 
 function createBoard() {
-  return Array.from({ length: GRID }, () =>
-    Array.from({ length: GRID }, () => ({ unit: null, hit: false, miss: false }))
+  return Array.from({ length: GRID_H }, () =>
+    Array.from({ length: GRID_W }, () => ({ unit: null, hit: false, miss: false }))
   );
 }
 
@@ -58,10 +59,10 @@ function placeUnitsRandom(board) {
   getUnits().forEach((unit, idx) => {
     let placed = false;
     let attempts = 0;
-    while (!placed && attempts < 150) {
+    while (!placed && attempts < 200) {
       const horizontal = Math.random() > 0.5;
-      const x = Math.floor(Math.random() * (horizontal ? GRID - unit.size + 1 : GRID));
-      const y = Math.floor(Math.random() * (horizontal ? GRID : GRID - unit.size + 1));
+      const x = Math.floor(Math.random() * (horizontal ? GRID_W - unit.size + 1 : GRID_W));
+      const y = Math.floor(Math.random() * (horizontal ? GRID_H : GRID_H - unit.size + 1));
       if (canPlace(board, x, y, unit.size, horizontal, null)) {
         placeUnit(board, x, y, unit.size, horizontal, idx);
         placed = true;
@@ -76,7 +77,7 @@ function canPlace(board, x, y, size, horizontal, ignoreId = null) {
   for (let i = 0; i < size; i++) {
     const cx = horizontal ? x + i : x;
     const cy = horizontal ? y : y + i;
-    if (cx >= GRID || cy >= GRID) return false;
+    if (cx >= GRID_W || cy >= GRID_H || cx < 0 || cy < 0) return false;
     const cell = board[cy][cx];
     if (cell.unit !== null && cell.unit !== ignoreId) return false;
   }
@@ -92,8 +93,8 @@ function placeUnit(board, x, y, size, horizontal, unitId) {
 }
 
 function removeUnit(board, unitId) {
-  for (let y = 0; y < GRID; y++) {
-    for (let x = 0; x < GRID; x++) {
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
       if (board[y][x].unit === unitId) board[y][x].unit = null;
     }
   }
@@ -101,8 +102,8 @@ function removeUnit(board, unitId) {
 
 function getUnitCells(board, unitId) {
   const cells = [];
-  for (let y = 0; y < GRID; y++) {
-    for (let x = 0; x < GRID; x++) {
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
       if (board[y][x].unit === unitId) cells.push({ x, y });
     }
   }
@@ -115,11 +116,12 @@ function isHorizontal(cells) {
 }
 
 function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agua", highlight = null) {
-  const size = ctx.canvas.width;
-  const cell = size / GRID;
-  ctx.clearRect(0, 0, size, size);
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+  const cellW = w / GRID_W;
+  const cellH = h / GRID_H;
+  ctx.clearRect(0, 0, w, h);
 
-  // Base color by terrain + map
   if (terrain === "agua") {
     if (map === "nahuel") ctx.fillStyle = "#38bdf8";
     else if (map === "iguazu") ctx.fillStyle = "#22c55e";
@@ -131,46 +133,45 @@ function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agu
   } else {
     ctx.fillStyle = map === "glaciares" ? "#e0f2fe" : "#64748b";
   }
-  ctx.fillRect(0, 0, size, size);
+  ctx.fillRect(0, 0, w, h);
 
-  for (let y = 0; y < GRID; y++) {
-    for (let x = 0; x < GRID; x++) {
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
       const cellData = board[y][x];
       ctx.strokeStyle = "#0f172a";
       ctx.lineWidth = 1;
-      ctx.strokeRect(x * cell, y * cell, cell, cell);
+      ctx.strokeRect(x * cellW, y * cellH, cellW, cellH);
 
       if (showUnits && cellData.unit !== null) {
         ctx.fillStyle = terrain === "tierra" ? "#78350f" : "#1e3a8a";
-        ctx.fillRect(x * cell + 2, y * cell + 2, cell - 4, cell - 4);
+        ctx.fillRect(x * cellW + 1, y * cellH + 1, cellW - 2, cellH - 2);
       }
       if (cellData.hit) {
         ctx.fillStyle = "#ef4444";
         ctx.beginPath();
-        ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.28, 0, Math.PI * 2);
+        ctx.arc(x * cellW + cellW / 2, y * cellH + cellH / 2, Math.min(cellW, cellH) * 0.28, 0, Math.PI * 2);
         ctx.fill();
       } else if (cellData.miss) {
         ctx.fillStyle = "#94a3b8";
         ctx.beginPath();
-        ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.18, 0, Math.PI * 2);
+        ctx.arc(x * cellW + cellW / 2, y * cellH + cellH / 2, Math.min(cellW, cellH) * 0.18, 0, Math.PI * 2);
         ctx.fill();
       }
     }
   }
 
-  // Highlight selected unit or preview
   if (highlight && highlight.cells) {
     ctx.fillStyle = "rgba(250, 204, 21, 0.7)";
     highlight.cells.forEach(c => {
-      if (c.x >= 0 && c.x < GRID && c.y >= 0 && c.y < GRID) {
-        ctx.fillRect(c.x * cell + 2, c.y * cell + 2, cell - 4, cell - 4);
+      if (c.x >= 0 && c.x < GRID_W && c.y >= 0 && c.y < GRID_H) {
+        ctx.fillRect(c.x * cellW + 1, c.y * cellH + 1, cellW - 2, cellH - 2);
       }
     });
   }
 }
 
 function shoot(board, x, y) {
-  if (x < 0 || y < 0 || x >= GRID || y >= GRID) return null;
+  if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) return null;
   const cell = board[y][x];
   if (cell.hit || cell.miss) return null;
   if (cell.unit !== null) {
@@ -188,8 +189,8 @@ function checkWin(board) {
 
 function aiShoot(board) {
   const candidates = [];
-  for (let y = 0; y < GRID; y++) {
-    for (let x = 0; x < GRID; x++) {
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
       if (!board[y][x].hit && !board[y][x].miss) candidates.push([x, y]);
     }
   }
@@ -292,9 +293,22 @@ function beginPlacement() {
   state.boards.inv = createBoard();
   placeUnitsRandom(state.boards.arg);
   placeUnitsRandom(state.boards.inv);
+  showBoards();
   startPlacementTimer();
   updatePlacementMessage();
   drawAll();
+}
+
+function showBoards() {
+  const ownCont = document.querySelector("#own-board").parentElement;
+  const enemyCont = document.querySelector("#enemy-board").parentElement;
+  if (state.phase === "place" || state.phase === "defend") {
+    ownCont.classList.remove("hidden");
+    enemyCont.classList.add("hidden");
+  } else {
+    ownCont.classList.add("hidden");
+    enemyCont.classList.remove("hidden");
+  }
 }
 
 function startPlacementTimer() {
@@ -326,9 +340,10 @@ function startBattle() {
   clearInterval(state.placeTimer);
   document.getElementById("timer").classList.add("hidden");
   document.getElementById("rotate-btn").classList.add("hidden");
-  state.phase = "battle";
+  state.phase = "attack";
   state.selectedUnit = null;
   state.currentPlayer = "arg";
+  showBoards();
   updateUI();
   drawAll();
   document.getElementById("message").textContent = "¡A batallar! Tocá el tablero enemigo";
@@ -338,7 +353,6 @@ function drawAll(highlight = null) {
   if (!state.boards.arg) return;
   let hl = highlight;
   if (state.selectedUnit && !hl) {
-    // Preview current position of selected (if any)
     hl = { cells: state.selectedUnit.previewCells || [] };
   }
   drawBoard(ownCtx, state.boards.arg, true, state.map, state.terrain, hl);
@@ -349,18 +363,17 @@ function getCellFromEvent(e, canvas) {
   const rect = canvas.getBoundingClientRect();
   const clientX = e.clientX || (e.changedTouches && e.changedTouches[0].clientX);
   const clientY = e.clientY || (e.changedTouches && e.changedTouches[0].clientY);
-  const x = Math.floor((clientX - rect.left) / (rect.width / GRID));
-  const y = Math.floor((clientY - rect.top) / (rect.height / GRID));
+  const x = Math.floor((clientX - rect.left) / (rect.width / GRID_W));
+  const y = Math.floor((clientY - rect.top) / (rect.height / GRID_H));
   return { x, y };
 }
 
 function handleOwnBoard(e) {
   if (state.phase !== "place") return;
   const { x, y } = getCellFromEvent(e, ownCanvas);
-  if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
+  if (x < 0 || x >= GRID_W || y < 0 || y >= GRID_H) return;
 
   if (!state.selectedUnit) {
-    // Pick up unit
     const unitId = state.boards.arg[y][x].unit;
     if (unitId === null) return;
     const cells = getUnitCells(state.boards.arg, unitId);
@@ -376,7 +389,6 @@ function handleOwnBoard(e) {
     updatePlacementMessage();
     drawAll({ cells });
   } else {
-    // Place selected unit
     const su = state.selectedUnit;
     if (canPlace(state.boards.arg, x, y, su.size, su.horizontal, su.id)) {
       placeUnit(state.boards.arg, x, y, su.size, su.horizontal, su.id);
@@ -389,13 +401,12 @@ function handleOwnBoard(e) {
   }
 }
 
-// Drag support
 let dragging = false;
 ownCanvas.addEventListener("mousedown", e => { dragging = true; handleOwnBoard(e); });
 ownCanvas.addEventListener("mousemove", e => {
   if (!dragging || state.phase !== "place" || !state.selectedUnit) return;
   const { x, y } = getCellFromEvent(e, ownCanvas);
-  if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
+  if (x < 0 || x >= GRID_W || y < 0 || y >= GRID_H) return;
   const su = state.selectedUnit;
   const cells = [];
   for (let i = 0; i < su.size; i++) {
@@ -419,7 +430,7 @@ ownCanvas.addEventListener("touchmove", e => {
   e.preventDefault();
   if (!dragging || !state.selectedUnit) return;
   const { x, y } = getCellFromEvent(e, ownCanvas);
-  if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
+  if (x < 0 || x >= GRID_W || y < 0 || y >= GRID_H) return;
   const su = state.selectedUnit;
   const cells = [];
   for (let i = 0; i < su.size; i++) {
@@ -437,7 +448,7 @@ ownCanvas.addEventListener("touchend", e => {
 });
 
 function handleShot(x, y) {
-  if (state.phase !== "battle" || state.currentPlayer !== "arg") return;
+  if (state.phase !== "attack" || state.currentPlayer !== "arg") return;
   const result = shoot(state.boards.inv, x, y);
   if (!result) return;
   document.getElementById("message").textContent = result === "hit" ? "¡Impacto!" : "Vacío...";
@@ -448,6 +459,8 @@ function handleShot(x, y) {
   }
   drawAll();
   if (state.mode === "pvc") {
+    state.phase = "defend";
+    showBoards();
     state.currentPlayer = "inv";
     updateUI();
     setTimeout(aiTurn, 700);
@@ -476,6 +489,8 @@ function aiTurn() {
     return;
   }
   drawAll();
+  state.phase = "attack";
+  showBoards();
   state.currentPlayer = "arg";
   updateUI();
 }

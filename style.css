@@ -18,7 +18,7 @@ body { display: flex; flex-direction: column; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 0.6rem;
+  padding: 0.5rem;
   text-align: center;
   overflow: hidden;
   min-height: 0;
@@ -70,8 +70,8 @@ body { display: flex; flex-direction: column; }
   border: 3px solid #334155;
   border-radius: 10px;
   cursor: crosshair;
-  width: min(88vw, 300px);
-  height: min(88vw, 300px);
+  width: min(90vw, 280px);
+  height: min(70vh, 520px);
   touch-action: none;
   display: block;
 }
@@ -92,7 +92,6 @@ body { display: flex; flex-direction: column; }
   width: 90%; max-width: 340px;
 }
 
-/* Park themes */
 body.map-nahuel { background: linear-gradient(160deg, #0c4a6e, #155e75 40%, #0e7490); }
 body.map-iguazu { background: linear-gradient(160deg, #14532d, #166534 40%, #15803d); }
 body.map-glaciares { background: linear-gradient(160deg, #1e293b, #334155 40%, #0ea5e9); }
@@ -102,6 +101,5 @@ body.map-iguazu .board-container canvas { background: #4ade80; }
 body.map-glaciares .board-container canvas { background: #e0f2fe; }
 
 @media (min-width: 750px) {
-  .boards { flex-direction: row; gap: 1.5rem; }
-  .board-container canvas { width: 320px; height: 320px; }
+  .board-container canvas { width: 320px; height: 600px; }
 }
