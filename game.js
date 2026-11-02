@@ -33,6 +33,7 @@ let state = {
   currentPlayer: "arg",
   boards: { arg: null, inv: null },
   powers: { radar: 2, bomb: 1, camo: 2 },
+  placing: { index: 0, horizontal: true },
   peer: null,
   conn: null,
   isHost: false
@@ -86,7 +87,7 @@ function placeUnit(board, x, y, size, horizontal, unitId) {
   }
 }
 
-function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agua") {
+function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agua", preview = null) {
   const size = ctx.canvas.width;
   const cell = size / GRID;
   ctx.clearRect(0, 0, size, size);
@@ -123,6 +124,23 @@ function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agu
         ctx.beginPath();
         ctx.arc(x * cell + cell/2, y * cell + cell/2, cell * 0.2, 0, Math.PI * 2);
         ctx.fill();
+      }
+    }
+  }
+
+  // Preview for placement
+  if (preview && state.phase === "place") {
+    const units = getUnits();
+    const unit = units[state.placing.index];
+    if (unit) {
+      const ok = canPlace(board, preview.x, preview.y, unit.size, state.placing.horizontal);
+      ctx.fillStyle = ok ? "rgba(34,197,94,0.6)" : "rgba(239,68,68,0.6)";
+      for (let i = 0; i < unit.size; i++) {
+        const cx = state.placing.horizontal ? preview.x + i : preview.x;
+        const cy = state.placing.horizontal ? preview.y : preview.y + i;
+        if (cx < GRID && cy < GRID) {
+          ctx.fillRect(cx * cell + 1, cy * cell + 1, cell - 2, cell - 2);
+        }
       }
     }
   }
@@ -201,7 +219,7 @@ function startGame() {
     setupPvP();
     return;
   }
-  beginLocalGame();
+  beginPlacement();
 }
 
 function setupPvP() {
@@ -218,7 +236,7 @@ function setupPvP() {
     state.conn = conn;
     setupConnection();
     document.getElementById("waiting").textContent = "¡Rival conectado!";
-    setTimeout(beginLocalGame, 600);
+    setTimeout(beginPlacement, 600);
   });
   state.peer.on("error", err => {
     console.error(err);
@@ -236,23 +254,40 @@ function setupConnection() {
   });
 }
 
-function beginLocalGame() {
+function beginPlacement() {
   document.getElementById("menu").classList.add("hidden");
   document.getElementById("game").classList.remove("hidden");
   document.body.className = `map-${state.map}`;
-  state.phase = "battle";
-  state.currentPlayer = "arg";
+  state.phase = "place";
+  state.placing.index = 0;
+  state.placing.horizontal = true;
   state.boards.arg = createBoard();
   state.boards.inv = createBoard();
   placeUnitsRandom(state.boards.inv);
-  if (state.mode === "pvc") placeUnitsRandom(state.boards.arg);
+  updatePlacementMessage();
+  drawAll();
+}
+
+function updatePlacementMessage() {
+  const units = getUnits();
+  if (state.placing.index >= units.length) {
+    startBattle();
+    return;
+  }
+  const unit = units[state.placing.index];
+  document.getElementById("message").textContent = `Colocá: ${unit.name} (${unit.size}) | Tocá para rotar | ${state.placing.horizontal ? "Horizontal" : "Vertical"}`;
+}
+
+function startBattle() {
+  state.phase = "battle";
+  state.currentPlayer = "arg";
   updateUI();
   drawAll();
   document.getElementById("message").textContent = "¡A batallar! Tocá el tablero enemigo";
 }
 
-function drawAll() {
-  drawBoard(ownCtx, state.boards.arg, true, state.map, state.terrain);
+function drawAll(preview = null) {
+  drawBoard(ownCtx, state.boards.arg, true, state.map, state.terrain, preview);
   drawBoard(enemyCtx, state.boards.inv, false, state.map, state.terrain);
 }
 
@@ -264,6 +299,50 @@ function getCellFromEvent(e, canvas) {
   const y = Math.floor((clientY - rect.top) / (rect.height / GRID));
   return { x, y };
 }
+
+function handleOwnBoard(e) {
+  if (state.phase !== "place") return;
+  const { x, y } = getCellFromEvent(e, ownCanvas);
+  const units = getUnits();
+  const unit = units[state.placing.index];
+  if (!unit) return;
+  if (canPlace(state.boards.arg, x, y, unit.size, state.placing.horizontal)) {
+    placeUnit(state.boards.arg, x, y, unit.size, state.placing.horizontal, state.placing.index);
+    state.placing.index++;
+    updatePlacementMessage();
+    drawAll();
+  } else {
+    document.getElementById("message").textContent = "No entra ahí. Probá otro lugar o rotá.";
+  }
+}
+
+function handleRotate() {
+  if (state.phase !== "place") return;
+  state.placing.horizontal = !state.placing.horizontal;
+  updatePlacementMessage();
+}
+
+ownCanvas.addEventListener("click", e => {
+  if (state.phase === "place") {
+    // Double tap or second click to rotate, but simpler: long press or separate button. Use click for place, and add rotate on own board double.
+    handleOwnBoard(e);
+  }
+});
+ownCanvas.addEventListener("touchend", e => {
+  e.preventDefault();
+  if (state.phase === "place") handleOwnBoard(e);
+});
+ownCanvas.addEventListener("contextmenu", e => {
+  e.preventDefault();
+  handleRotate();
+});
+// Double tap to rotate
+let lastTap = 0;
+ownCanvas.addEventListener("touchend", e => {
+  const now = Date.now();
+  if (now - lastTap < 300) handleRotate();
+  lastTap = now;
+});
 
 function handleShot(x, y) {
   if (state.phase !== "battle" || state.currentPlayer !== "arg") return;
@@ -371,7 +450,7 @@ if (params.has("room")) {
     state.conn = state.peer.connect(room);
     state.conn.on("open", () => {
       setupConnection();
-      beginLocalGame();
+      beginPlacement();
     });
     state.conn.on("error", () => alert("No se pudo conectar al host"));
   });

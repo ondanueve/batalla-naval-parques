@@ -120,7 +120,16 @@
     document.body.appendChild(el);
   }
 
-  // Start on first interaction
+  // Try autoplay immediately on load
+  function tryAutoplay() {
+    if (started) return;
+    startJuke();
+  }
+  window.addEventListener("load", tryAutoplay);
+  setTimeout(tryAutoplay, 300);
+  setTimeout(tryAutoplay, 1000);
+
+  // Fallback on any interaction
   const start = () => { if (!started) startJuke(); };
   document.addEventListener("click", start, { once: true });
   document.addEventListener("touchstart", start, { once: true });
