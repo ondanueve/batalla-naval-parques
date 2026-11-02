@@ -49,7 +49,10 @@ function getUnits() {
 }
 
 function createBoard() {
-  return Array.from({ length: GRID }, () => Array(GRID).fill({ unit: null, hit: false, miss: false }));
+  // Fix: each cell must be a unique object
+  return Array.from({ length: GRID }, () =>
+    Array.from({ length: GRID }, () => ({ unit: null, hit: false, miss: false }))
+  );
 }
 
 function placeUnitsRandom(board) {
@@ -91,6 +94,7 @@ function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agu
   const size = ctx.canvas.width;
   const cell = size / GRID;
   ctx.clearRect(0, 0, size, size);
+
   if (terrain === "agua") {
     if (map === "nahuel") ctx.fillStyle = "#38bdf8";
     else if (map === "iguazu") ctx.fillStyle = "#22c55e";
@@ -110,36 +114,37 @@ function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agu
       ctx.strokeStyle = "#0f172a";
       ctx.lineWidth = 1;
       ctx.strokeRect(x * cell, y * cell, cell, cell);
+
       if (showUnits && cellData.unit !== null) {
         ctx.fillStyle = terrain === "tierra" ? "#78350f" : "#1e3a8a";
-        ctx.fillRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2);
+        ctx.fillRect(x * cell + 2, y * cell + 2, cell - 4, cell - 4);
       }
       if (cellData.hit) {
         ctx.fillStyle = "#ef4444";
         ctx.beginPath();
-        ctx.arc(x * cell + cell/2, y * cell + cell/2, cell * 0.3, 0, Math.PI * 2);
+        ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.28, 0, Math.PI * 2);
         ctx.fill();
       } else if (cellData.miss) {
         ctx.fillStyle = "#94a3b8";
         ctx.beginPath();
-        ctx.arc(x * cell + cell/2, y * cell + cell/2, cell * 0.2, 0, Math.PI * 2);
+        ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.18, 0, Math.PI * 2);
         ctx.fill();
       }
     }
   }
 
-  // Preview for placement
+  // Preview during placement
   if (preview && state.phase === "place") {
     const units = getUnits();
     const unit = units[state.placing.index];
     if (unit) {
       const ok = canPlace(board, preview.x, preview.y, unit.size, state.placing.horizontal);
-      ctx.fillStyle = ok ? "rgba(34,197,94,0.6)" : "rgba(239,68,68,0.6)";
+      ctx.fillStyle = ok ? "rgba(34,197,94,0.7)" : "rgba(239,68,68,0.7)";
       for (let i = 0; i < unit.size; i++) {
         const cx = state.placing.horizontal ? preview.x + i : preview.x;
         const cy = state.placing.horizontal ? preview.y : preview.y + i;
-        if (cx < GRID && cy < GRID) {
-          ctx.fillRect(cx * cell + 1, cy * cell + 1, cell - 2, cell - 2);
+        if (cx >= 0 && cx < GRID && cy >= 0 && cy < GRID) {
+          ctx.fillRect(cx * cell + 2, cy * cell + 2, cell - 4, cell - 4);
         }
       }
     }
@@ -148,12 +153,13 @@ function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agu
 
 function shoot(board, x, y) {
   if (x < 0 || y < 0 || x >= GRID || y >= GRID) return null;
-  if (board[y][x].hit || board[y][x].miss) return null;
-  if (board[y][x].unit !== null) {
-    board[y][x].hit = true;
+  const cell = board[y][x];
+  if (cell.hit || cell.miss) return null;
+  if (cell.unit !== null) {
+    cell.hit = true;
     return "hit";
   } else {
-    board[y][x].miss = true;
+    cell.miss = true;
     return "miss";
   }
 }
@@ -203,13 +209,19 @@ document.getElementById("start-btn").onclick = startGame;
 document.getElementById("back-btn").onclick = () => {
   document.getElementById("game").classList.add("hidden");
   document.getElementById("menu").classList.remove("hidden");
-  if (state.peer) try { state.peer.destroy(); } catch(e){}
+  if (state.peer) try { state.peer.destroy(); } catch (e) {}
 };
 
 document.getElementById("copy-link").onclick = () => {
   const input = document.getElementById("invite-link");
   input.select();
   navigator.clipboard.writeText(input.value).then(() => alert("Enlace copiado"));
+};
+
+document.getElementById("rotate-btn").onclick = () => {
+  if (state.phase !== "place") return;
+  state.placing.horizontal = !state.placing.horizontal;
+  updatePlacementMessage();
 };
 
 function startGame() {
@@ -257,6 +269,7 @@ function setupConnection() {
 function beginPlacement() {
   document.getElementById("menu").classList.add("hidden");
   document.getElementById("game").classList.remove("hidden");
+  document.getElementById("rotate-btn").classList.remove("hidden");
   document.body.className = `map-${state.map}`;
   state.phase = "place";
   state.placing.index = 0;
@@ -275,18 +288,21 @@ function updatePlacementMessage() {
     return;
   }
   const unit = units[state.placing.index];
-  document.getElementById("message").textContent = `Colocá: ${unit.name} (${unit.size}) | Tocá para rotar | ${state.placing.horizontal ? "Horizontal" : "Vertical"}`;
+  const ori = state.placing.horizontal ? "Horizontal" : "Vertical";
+  document.getElementById("message").textContent = `Colocá ${unit.name} (${unit.size}) | ${ori}`;
 }
 
 function startBattle() {
   state.phase = "battle";
   state.currentPlayer = "arg";
+  document.getElementById("rotate-btn").classList.add("hidden");
   updateUI();
   drawAll();
   document.getElementById("message").textContent = "¡A batallar! Tocá el tablero enemigo";
 }
 
 function drawAll(preview = null) {
+  if (!state.boards.arg) return;
   drawBoard(ownCtx, state.boards.arg, true, state.map, state.terrain, preview);
   drawBoard(enemyCtx, state.boards.inv, false, state.map, state.terrain);
 }
@@ -295,8 +311,10 @@ function getCellFromEvent(e, canvas) {
   const rect = canvas.getBoundingClientRect();
   const clientX = e.clientX || (e.changedTouches && e.changedTouches[0].clientX);
   const clientY = e.clientY || (e.changedTouches && e.changedTouches[0].clientY);
-  const x = Math.floor((clientX - rect.left) / (rect.width / GRID));
-  const y = Math.floor((clientY - rect.top) / (rect.height / GRID));
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = Math.floor((clientX - rect.left) * scaleX / (canvas.width / GRID));
+  const y = Math.floor((clientY - rect.top) * scaleY / (canvas.height / GRID));
   return { x, y };
 }
 
@@ -312,36 +330,16 @@ function handleOwnBoard(e) {
     updatePlacementMessage();
     drawAll();
   } else {
-    document.getElementById("message").textContent = "No entra ahí. Probá otro lugar o rotá.";
+    document.getElementById("message").textContent = "No entra ahí. Rotá o probá otro lugar.";
   }
-}
-
-function handleRotate() {
-  if (state.phase !== "place") return;
-  state.placing.horizontal = !state.placing.horizontal;
-  updatePlacementMessage();
 }
 
 ownCanvas.addEventListener("click", e => {
-  if (state.phase === "place") {
-    // Double tap or second click to rotate, but simpler: long press or separate button. Use click for place, and add rotate on own board double.
-    handleOwnBoard(e);
-  }
+  if (state.phase === "place") handleOwnBoard(e);
 });
 ownCanvas.addEventListener("touchend", e => {
   e.preventDefault();
   if (state.phase === "place") handleOwnBoard(e);
-});
-ownCanvas.addEventListener("contextmenu", e => {
-  e.preventDefault();
-  handleRotate();
-});
-// Double tap to rotate
-let lastTap = 0;
-ownCanvas.addEventListener("touchend", e => {
-  const now = Date.now();
-  if (now - lastTap < 300) handleRotate();
-  lastTap = now;
 });
 
 function handleShot(x, y) {
@@ -408,7 +406,7 @@ document.getElementById("power-camo").onclick = () => {
   document.getElementById("message").textContent = "Camuflaje";
 };
 
-// Jukebox panel
+// Jukebox
 document.getElementById("juke-btn").onclick = () => {
   document.getElementById("juke-panel").classList.remove("hidden");
   populateSongs();

@@ -47,7 +47,7 @@
         <p id="waiting">Esperando...</p>
       </div>
     </div>
-    <button id="juke-btn" style="margin-top:0.5rem">🎵 Jukebox</button>
+    <button id="juke-btn" style="margin-top:0.4rem">🎵 Jukebox</button>
   </div>
 
   <div id="game" class="screen hidden">
@@ -59,19 +59,22 @@
     <div class="boards">
       <div class="board-container">
         <h3>Tu Territorio</h3>
-        <canvas id="own-board" width="320" height="320"></canvas>
+        <canvas id="own-board" width="280" height="280"></canvas>
       </div>
       <div class="board-container">
         <h3>Enemigo</h3>
-        <canvas id="enemy-board" width="320" height="320"></canvas>
+        <canvas id="enemy-board" width="280" height="280"></canvas>
       </div>
+    </div>
+    <div class="controls">
+      <button id="rotate-btn" class="hidden">🔄 Rotar</button>
     </div>
     <div class="powers">
       <button id="power-radar">📡 Radar</button>
       <button id="power-bomb">💣 Bomba</button>
       <button id="power-camo">👻 Camo</button>
     </div>
-    <div id="message">Tocá el tablero enemigo</div>
+    <div id="message">Tocá tu tablero para colocar</div>
     <button id="back-btn">Menú</button>
   </div>
 
