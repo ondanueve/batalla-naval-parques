@@ -39,25 +39,25 @@
 
   const FLEETS = {
     agua: [
-      { name: "Portaaviones", size: 5 },
-      { name: "Acorazado", size: 4 },
-      { name: "Crucero", size: 3 },
-      { name: "Submarino", size: 3 },
-      { name: "Destructor", size: 2 }
+      { name: "Portaaviones", size: 5, kind: "barco" },
+      { name: "Acorazado", size: 4, kind: "barco" },
+      { name: "Crucero", size: 3, kind: "barco" },
+      { name: "Submarino", size: 3, kind: "barco" },
+      { name: "Destructor", size: 2, kind: "barco" }
     ],
     tierra: [
-      { name: "Tanque pesado", size: 5 },
-      { name: "Blindado", size: 4 },
-      { name: "Artillería", size: 3 },
-      { name: "Patrulla", size: 3 },
-      { name: "Escuadra", size: 2 }
+      { name: "Tanque pesado", size: 5, kind: "tanque" },
+      { name: "Tanque", size: 4, kind: "tanque" },
+      { name: "Tanque medio", size: 3, kind: "tanque" },
+      { name: "Tanque ligero", size: 3, kind: "tanque" },
+      { name: "Blindado", size: 2, kind: "tanque" }
     ],
     mixto: [
-      { name: "Base anfibia", size: 5 },
-      { name: "Transporte", size: 4 },
-      { name: "Lancha", size: 3 },
-      { name: "Explorador", size: 3 },
-      { name: "Puesto", size: 2 }
+      { name: "Crucero", size: 5, kind: "barco" },
+      { name: "Lancha", size: 3, kind: "barco" },
+      { name: "Destructor", size: 2, kind: "barco" },
+      { name: "Tanque pesado", size: 4, kind: "tanque" },
+      { name: "Tanque", size: 3, kind: "tanque" }
     ]
   };
 
@@ -90,6 +90,43 @@
     return x >= 0 && y >= 0 && x < W && y < H;
   }
 
+  const CROP_COUNT = 5;
+
+  /* 10 columnas × 20 filas, alineadas al jpg maps/{parque}-mixto-{0-4}.jpg.
+     W = agua (barcos). L = tierra o hielo (tanques). */
+  const MIXED = {
+    nahuel: [
+      ["LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLWWW","LLLLLLWWWW","WLLLLWWWWW","WWLLLWWWWW","WWWWLLLWWW","WWWWWWLWWW","WWWWWWWWWW","WWWWWWWWWW","LLLWWWWWWW","LLLLLWWWWW","LLWLLWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW"],
+      ["LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","WLLLLLLLLL","WLLLLLLLLL","WWLLLLLLLL","WWLLLLLLLL","WWWWLLLLLL","WWWWWLLLLL","WWWWWWLLLL","WWWWWWLLLL","WWWWWWWLWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW"],
+      ["WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","LWWWWWWWWW","LWWWWWWWWW","LLWWWWWWWW","LLLWWWWWWW","LLLLWWWWWW","LLLLWWWWWW","LLLLWWWWWW","LLLLWWWWWW","LLLLLWWWWW","LLLLLLWWWW","LLLLLLLWWW"],
+      ["WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","LLWWWWWWWW","LLLWWWWWWW","LLWWWWWWWW","LLWWWWWWWW","LLWWWWWWWW","LLLWWWWWWW","LLWWWWWWWW","LLLWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW"],
+      ["WWWWWWWLLL","WWWWWWLLLL","WWWWWWLLLL","WWWWWWLLLL","WWWWWWLLLL","WWWWWWWLLL","WWWWWWWWWL","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW"]
+    ],
+    iguazu: [
+      ["LLLWWWWWWW","LLLLWWWWWW","LLLLWWWWWW","LLLLWWWWWW","LLLLLWWWWW","LLLLLWWWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLLWWW","LLLLLLLWWW","LLLLLLLWWW","LLLLLLLWWW","LLLLLLLWWW","LLLLLLLWWW","LLLLLLLWWW","LLLLLLLWWW","LLLLLLLWWW","LLLLLLLWWW"],
+      ["LLLLLLLWWW","LLLLLLLWWW","LLLLLLLWWW","LLLLLLLWWW","LLLLLLLWWW","LLLLLLLWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLLWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLWWWWW","LLLLWWWWWW","LLLWWWWWWW"],
+      ["WLLLLLLLLL","WLLLLLLLLL","WLLLLLLLLL","WLLLLLLLLL","WLLLLLLLLL","WWLLLLLLLL","WWLLLLLLLL","WWWLLLLLLL","WWWWWLLLLL","WWWWWWLLLL","WWWWWWWWLL","WWWWWWWWWL","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWLWW","WWWWWWWLWW","WWWWWWWLWW","WWWWWWWWWW","WWWWWWWWWW"],
+      ["LLLLLLWWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLLWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLLWWWW","LLLLLWWWWW","LLLLWWWWWW","LLLWWWWWWW","LWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW"],
+      ["LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","WLLLLLLLLL","WWLLLLLLLL","WWWWWWLLLL","WWWWWWWLLW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW"]
+    ],
+    glaciares: [
+      ["WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","LLLWWWWWWW","LLLLLWWWWW","LLLLLLLWWW","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL"],
+      ["LLLLLLLWWW","LLLLLLLWWW","LLLLLLWWWW","LLLLLWWWWW","LLLLWWWWWW","LLLWWWWWWW","LLWWWWWWWW","LWWWWWWWWW","WWWWWWWWWW","WWWWWWLLLL","WWWWLLLLLL","WWLLLLLLLL","WLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL"],
+      ["LLLLWWWWWW","LLLWWWWWWW","LLWWWWWWWW","LWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWLLWWWW","WWLLLLLLLL","WLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL"],
+      ["WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWWWWWWW","WWWWLLWWWW","WWWLLLLWWW","WWLLLLLLWW","WLLLLLLLLW","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL","LLLLLLLLLL"],
+      ["LLLWWWWWWW","LLLWWWWWWW","LLLWWWWWWW","LLLLWWWWWW","LLLLLWWWWW","LLLLLWWWWW","LLLLLWWWWW","LLLLLLWWWW","LLLLLWWWWW","LLLLWWWWWW","LLLWWWWWWW","LLLWWWWWWW","LLWWWWWWWW","LLWWWWWWWW","LLWWWWWWWW","LLWWWWWWWW","LLWWWWWWWW","LLLWWWWWWW","LLLWWWWWWW","LLLWWWWWWW"]
+    ]
+  };
+
+  function isLand(terrain, map, crop, x, y) {
+    if (terrain === "tierra") return true;
+    if (terrain !== "mixto") return false;
+    const table = MIXED[map] || MIXED.nahuel;
+    const rows = table[(crop || 0) % CROP_COUNT];
+    const row = rows[y] || "";
+    return row[x] === "L";
+  }
+
   function overlaps(fleet, ship, ignoreId) {
     const taken = new Set();
     fleet.forEach((s) => {
@@ -99,32 +136,52 @@
     return cellsOf(ship).some((c) => !inBounds(c.x, c.y) || taken.has(key(c.x, c.y)));
   }
 
-  function canPlace(fleet, x, y, size, horizontal, ignoreId) {
-    const ghost = { id: ignoreId, x, y, size, horizontal, lifted: false };
-    return !overlaps(fleet, ghost, ignoreId);
+  function placeIssue(fleet, x, y, size, horizontal, ignoreId, kind, terrain, map, crop) {
+    const ghost = { x, y, size, horizontal, lifted: false };
+    const cells = cellsOf(ghost);
+    if (cells.some((c) => !inBounds(c.x, c.y))) return "borde";
+    const taken = new Set();
+    (fleet || []).forEach((s) => {
+      if (s.lifted || (ignoreId != null && s.id === ignoreId)) return;
+      cellsOf(s).forEach((c) => taken.add(key(c.x, c.y)));
+    });
+    if (cells.some((c) => taken.has(key(c.x, c.y)))) return "solape";
+    if (kind === "barco" || kind === "tanque") {
+      const bad = cells.some((c) => {
+        const land = isLand(terrain, map, crop, c.x, c.y);
+        return kind === "tanque" ? !land : land;
+      });
+      if (bad) return kind === "barco" ? "tierra" : "agua";
+    }
+    return "";
   }
 
-  function placeRandom(terrain, rng) {
+  function canPlace(fleet, x, y, size, horizontal, ignoreId, kind, terrain, map, crop) {
+    return placeIssue(fleet, x, y, size, horizontal, ignoreId, kind, terrain, map, crop) === "";
+  }
+
+  function placeRandom(terrain, rng, map, crop) {
     const spec = FLEETS[terrain] || FLEETS.agua;
     const fleet = [];
     spec.forEach((u, id) => {
       let placed = false;
-      for (let n = 0; n < 500 && !placed; n++) {
-        const horizontal = rng() > 0.45;
+      const kind = u.kind || (terrain === "tierra" ? "tanque" : "barco");
+      for (let n = 0; n < 900 && !placed; n++) {
+        const horizontal = rng() > 0.42;
         const x = Math.floor(rng() * (horizontal ? W - u.size + 1 : W));
         const y = Math.floor(rng() * (horizontal ? H : H - u.size + 1));
-        const ship = {
-          id,
-          name: u.name,
-          size: u.size,
-          x,
-          y,
-          horizontal,
-          color: COLORS[id],
-          lifted: false
-        };
-        if (!overlaps(fleet, ship, null)) {
-          fleet.push(ship);
+        if (canPlace(fleet, x, y, u.size, horizontal, null, kind, terrain, map, crop || 0)) {
+          fleet.push({
+            id,
+            name: u.name,
+            size: u.size,
+            kind,
+            x,
+            y,
+            horizontal,
+            color: COLORS[id],
+            lifted: false
+          });
           placed = true;
         }
       }
@@ -257,8 +314,8 @@
 
   return {
     W, H, NATIONS, MAPS, FLEETS, COLORS,
-    key, cellsOf, inBounds, canPlace, placeRandom, fleetHp,
+    key, cellsOf, inBounds, canPlace, placeIssue, placeRandom, fleetHp,
     shipAt, shipStatus, resolveShots, cross, area, aiShot, scout, mulberry32,
-    battleMayStart
+    battleMayStart, isLand, CROP_COUNT, MIXED
   };
 });

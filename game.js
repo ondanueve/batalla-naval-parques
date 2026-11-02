@@ -17,9 +17,21 @@
     glaciares: { sea: "#bae6fd", deep: "#7dd3fc", foam: "rgba(255,255,255,.75)", land: "#94a3b8", spec: "#e2e8f0", ice: "#f8fafc" }
   };
   const HINTS = {
-    agua: "Flota naval sobre el lago.",
-    tierra: "Vehículos sobre el parque. Misma grilla.",
-    mixto: "Unidades anfibias. Agua y tierra se alternan."
+    agua: "Solo barcos, sobre agua. Tienen que entrar enteros y sin pisarse.",
+    tierra: "Solo tanques, sobre tierra. Enteros: si se salen o se pisan, no se apoyan.",
+    mixto: "Barcos en el agua y tanques en la tierra. En rojo, esa postura no vale."
+  };
+  const ISSUE_TEXT = {
+    borde: "No entra: se sale del mapa. Tiene que quedar entera.",
+    solape: "No entra: se pisa con otra unidad.",
+    tierra: "Ahí hay tierra. Este es un barco: solo puede ir al agua.",
+    agua: "Ahí hay agua. Este es un tanque: solo puede ir a tierra."
+  };
+  const ISSUE_BANNER = {
+    borde: "NO ENTRA · se sale",
+    solape: "NO ENTRA · se pisa",
+    tierra: "NO ENTRA · solo agua",
+    agua: "NO ENTRA · solo tierra"
   };
 
   const ui = {
@@ -45,7 +57,7 @@
   if (!ui.canvas) return;
   const ctx = ui.canvas.getContext("2d");
 
-  const opts = { map: "nahuel", terrain: "agua", mode: "pvc", nation: "chile" };
+  const opts = { map: "nahuel", terrain: "agua", mode: "pvc", nation: "chile", crop: 0 };
   let match = null;
   let peer = null;
   let conn = null;
@@ -62,6 +74,7 @@
   let moved = false;
   let gestureHeld = false;
   let preview = null;
+  let lastPlaceTag = "";
   let clockLeft = 60;
   let clockId = 0;
   let busy = false;
@@ -222,13 +235,18 @@
     return { dpr, padL, padT, cellW, cellH };
   }
 
-  function cellFromEvent(e) {
+  function cellFromEvent(e, loose) {
     const r = ui.canvas.getBoundingClientRect();
     const cw = (r.width - PAD_L) / C.W;
     const ch = (r.height - PAD_T) / C.H;
     if (cw <= 0 || ch <= 0) return null;
-    const x = Math.floor((e.clientX - r.left - PAD_L) / cw);
-    const y = Math.floor((e.clientY - r.top - PAD_T) / ch);
+    let x = Math.floor((e.clientX - r.left - PAD_L) / cw);
+    let y = Math.floor((e.clientY - r.top - PAD_T) / ch);
+    if (loose) {
+      x = Math.max(-2, Math.min(C.W + 1, x));
+      y = Math.max(-2, Math.min(C.H + 1, y));
+      return { x, y };
+    }
     if (!C.inBounds(x, y)) return null;
     return { x, y };
   }
@@ -336,9 +354,7 @@
   }
 
   function isLand(x, y) {
-    if (opts.terrain === "tierra") return true;
-    if (opts.terrain === "mixto") return (x + y) % 2 === 0;
-    return false;
+    return C.isLand(opts.terrain, opts.map, opts.crop, x, y);
   }
 
   function asset(path) {
@@ -348,7 +364,7 @@
   }
 
   function parkImage() {
-    const id = opts.map || "nahuel";
+    const id = (opts.map || "nahuel") + "-" + (opts.terrain || "agua") + "-" + ((opts.crop || 0) % 5);
     if (!mapImgs[id]) {
       const img = new Image();
       img.src = asset("maps/" + id + ".jpg");
@@ -387,7 +403,11 @@
     for (let y = 0; y < C.H; y++) {
       for (let x = 0; x < C.W; x++) {
         const p = cellPx(g, x, y);
-        ctx.strokeStyle = "rgba(255,255,255,.38)";
+        if (opts.terrain === "mixto") {
+          ctx.fillStyle = isLand(x, y) ? "rgba(250, 204, 21, .28)" : "rgba(56, 189, 248, .22)";
+          ctx.fillRect(p.x, p.y, g.cellW, g.cellH);
+        }
+        ctx.strokeStyle = "rgba(255,255,255,.42)";
         ctx.lineWidth = Math.max(1, g.dpr * 0.6);
         ctx.strokeRect(p.x, p.y, g.cellW, g.cellH);
       }
@@ -416,44 +436,141 @@
     flushHud();
   }
 
+  function unitDir(ship) {
+    if (ship.horizontal) return { x: -1, y: 0 };
+    return { x: 0, y: -1 };
+  }
+
+  function drawShipHull(g, ship, color) {
+    const dir = unitDir(ship);
+    const bow = cellPx(g, ship.x, ship.y);
+    const sternI = ship.size - 1;
+    const stern = cellPx(
+      g,
+      ship.horizontal ? ship.x + sternI : ship.x,
+      ship.horizontal ? ship.y : ship.y + sternI
+    );
+    const bcx = bow.x + g.cellW * 0.5;
+    const bcy = bow.y + g.cellH * 0.5;
+    const scx = stern.x + g.cellW * 0.5;
+    const scy = stern.y + g.cellH * 0.5;
+    const dx = dir.x;
+    const dy = dir.y;
+    const px = -dy;
+    const py = dx;
+    const beam = Math.min(g.cellW, g.cellH) * 0.36;
+    const tipX = bcx + dx * g.cellW * 0.46;
+    const tipY = bcy + dy * g.cellH * 0.46;
+    const shX = bcx - dx * g.cellW * 0.02;
+    const shY = bcy - dy * g.cellH * 0.02;
+    const back = Math.min(g.cellW, g.cellH) * 0.36;
+    const bkX = scx - dx * back;
+    const bkY = scy - dy * back;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(shX + px * beam, shY + py * beam);
+    ctx.lineTo(bkX + px * beam * 0.86, bkY + py * beam * 0.86);
+    ctx.lineTo(bkX - px * beam * 0.86, bkY - py * beam * 0.86);
+    ctx.lineTo(shX - px * beam, shY - py * beam);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.55)";
+    ctx.lineWidth = Math.max(1.5, g.dpr);
+    ctx.stroke();
+    const cabX = bcx * 0.35 + scx * 0.65;
+    const cabY = bcy * 0.35 + scy * 0.65;
+    ctx.fillStyle = "rgba(15,23,42,.55)";
+    ctx.beginPath();
+    ctx.ellipse(cabX, cabY, beam * 0.42, beam * 0.62, Math.atan2(dy, dx), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.95)";
+    ctx.beginPath();
+    ctx.arc(bcx + dx * g.cellW * 0.08, bcy + dy * g.cellH * 0.08, Math.min(g.cellW, g.cellH) * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawTankCell(g, x, y, dir, color) {
+    const p = cellPx(g, x, y);
+    const cx = p.x + g.cellW * 0.5;
+    const cy = p.y + g.cellH * 0.5;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(Math.atan2(dir.y, dir.x));
+    const bw = Math.min(g.cellW, g.cellH);
+    ctx.fillStyle = "rgba(15,23,42,.8)";
+    ctx.fillRect(-bw * 0.16, -bw * 0.34, bw * 0.62, bw * 0.16);
+    ctx.fillRect(-bw * 0.16, bw * 0.18, bw * 0.62, bw * 0.16);
+    ctx.fillStyle = color;
+    roundRect(-bw * 0.22, -bw * 0.2, bw * 0.62, bw * 0.4, bw * 0.08);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.45)";
+    ctx.lineWidth = Math.max(1, g.dpr * 0.8);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(15,23,42,.72)";
+    ctx.beginPath();
+    ctx.arc(bw * 0.02, 0, bw * 0.13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(248,250,252,.9)";
+    ctx.lineWidth = Math.max(2, bw * 0.07);
+    ctx.beginPath();
+    ctx.moveTo(bw * 0.08, 0);
+    ctx.lineTo(bw * 0.4, 0);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawHull(g, ship, alpha, color) {
     ctx.save();
     ctx.globalAlpha = alpha;
     const fill = color || ship.color;
+    const kind = ship.kind || (opts.terrain === "tierra" ? "tanque" : "barco");
+    if (kind === "tanque") {
+      const dir = unitDir(ship);
+      for (let i = 0; i < ship.size; i++) {
+        const c = ship.horizontal ? { x: ship.x + i, y: ship.y } : { x: ship.x, y: ship.y + i };
+        drawTankCell(g, c.x, c.y, dir, fill);
+      }
+    } else {
+      drawShipHull(g, ship, fill);
+    }
+    ctx.restore();
+  }
+
+  function drawIllegalMarks(g, ship) {
+    ctx.save();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = Math.max(2, 2 * g.dpr);
     for (let i = 0; i < ship.size; i++) {
       const c = ship.horizontal ? { x: ship.x + i, y: ship.y } : { x: ship.x, y: ship.y + i };
       if (!C.inBounds(c.x, c.y)) continue;
       const p = cellPx(g, c.x, c.y);
-      const inset = Math.max(2, 2.5 * g.dpr);
-      ctx.fillStyle = fill;
-      roundRect(p.x + inset, p.y + inset, g.cellW - inset * 2, g.cellH - inset * 2, 4 * g.dpr);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(0,0,0,.4)";
-      ctx.lineWidth = Math.max(1, g.dpr);
+      const m = Math.min(g.cellW, g.cellH) * 0.22;
+      const cx = p.x + g.cellW / 2;
+      const cy = p.y + g.cellH / 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - m, cy - m);
+      ctx.lineTo(cx + m, cy + m);
+      ctx.moveTo(cx + m, cy - m);
+      ctx.lineTo(cx - m, cy + m);
       ctx.stroke();
     }
-    if (C.inBounds(ship.x, ship.y)) {
-      const bow = cellPx(g, ship.x, ship.y);
-      ctx.fillStyle = "rgba(255,255,255,.92)";
-      ctx.beginPath();
-      ctx.arc(bow.x + g.cellW * 0.5, bow.y + g.cellH * 0.5, Math.min(g.cellW, g.cellH) * 0.12, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    const midI = Math.floor(ship.size / 2);
-    const mid = ship.horizontal ? { x: ship.x + midI, y: ship.y } : { x: ship.x, y: ship.y + midI };
-    if (C.inBounds(mid.x, mid.y)) {
-      const mp = cellPx(g, mid.x, mid.y);
-      ctx.fillStyle = "rgba(15,23,42,.55)";
-      if (opts.terrain === "tierra") {
-        ctx.beginPath();
-        ctx.arc(mp.x + g.cellW * 0.62, mp.y + g.cellH * 0.38, Math.min(g.cellW, g.cellH) * 0.16, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (opts.terrain === "agua") {
-        ctx.fillRect(mp.x + g.cellW * 0.38, mp.y + g.cellH * 0.28, g.cellW * 0.26, g.cellH * 0.22);
-      } else {
-        ctx.fillRect(mp.x + g.cellW * 0.28, mp.y + g.cellH * 0.58, g.cellW * 0.44, g.cellH * 0.12);
-      }
-    }
+    ctx.restore();
+  }
+
+  function drawIssueBanner(g, text) {
+    ctx.save();
+    ctx.font = "800 " + Math.max(13, Math.floor(14 * g.dpr)) + "px Nunito, sans-serif";
+    const tw = ctx.measureText(text).width;
+    const x = g.padL + 6 * g.dpr;
+    const y = g.padT + 6 * g.dpr;
+    const h = Math.max(22, 24 * g.dpr);
+    ctx.fillStyle = "rgba(127, 29, 29, .94)";
+    roundRect(x, y, tw + 16 * g.dpr, h, 8);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x + 8 * g.dpr, y + h / 2);
     ctx.restore();
   }
 
@@ -477,20 +594,30 @@
           y: preview.y,
           size: hand.ship.size,
           horizontal: hand.horizontal,
+          kind: hand.ship.kind,
           color: hand.ship.color
         };
-        const ok = C.canPlace(match.local, ghost.x, ghost.y, ghost.size, ghost.horizontal, hand.ship.id);
-        drawHull(g, ghost, 0.85, ok ? "#4ade80" : "#f87171");
+        const issue = C.placeIssue(
+          match.local, ghost.x, ghost.y, ghost.size, ghost.horizontal,
+          hand.ship.id, ghost.kind, opts.terrain, opts.map, opts.crop
+        );
+        drawHull(g, ghost, 0.92, issue ? "#f87171" : "#4ade80");
+        if (issue) {
+          drawIllegalMarks(g, ghost);
+          drawIssueBanner(g, ISSUE_BANNER[issue] || "NO ENTRA");
+        }
       }
     } else {
       match.wrecks.forEach((w) => {
         if (!w.cells || !w.cells.length) return;
         const horizontal = w.cells.length < 2 || w.cells[0].y === w.cells[1].y;
+        const spec = (C.FLEETS[opts.terrain] || []).find((s) => s.name === w.name);
         drawHull(g, {
           x: Math.min.apply(null, w.cells.map((c) => c.x)),
           y: Math.min.apply(null, w.cells.map((c) => c.y)),
           size: w.cells.length,
           horizontal,
+          kind: spec ? spec.kind : "barco",
           color: "#64748b"
         }, 0.95, "#64748b");
       });
@@ -679,12 +806,12 @@
 
   function freshMatch(role) {
     let local;
-    try { local = C.placeRandom(opts.terrain, Math.random); }
-    catch (e) { local = C.placeRandom(opts.terrain, Math.random); }
+    try { local = C.placeRandom(opts.terrain, Math.random, opts.map, opts.crop); }
+    catch (e) { local = C.placeRandom(opts.terrain, Math.random, opts.map, opts.crop); }
     let remote = null;
     if (role === "arg" && opts.mode === "pvc") {
-      try { remote = C.placeRandom(opts.terrain, Math.random); }
-      catch (e) { remote = C.placeRandom(opts.terrain, Math.random); }
+      try { remote = C.placeRandom(opts.terrain, Math.random, opts.map, opts.crop); }
+      catch (e) { remote = C.placeRandom(opts.terrain, Math.random, opts.map, opts.crop); }
     }
     match = {
       role,
@@ -844,9 +971,17 @@
     preview = null;
   }
 
+  function handIssue(x, y) {
+    if (!hand || !match) return "borde";
+    return C.placeIssue(
+      match.local, x, y, hand.ship.size, hand.horizontal,
+      hand.ship.id, hand.ship.kind, opts.terrain, opts.map, opts.crop
+    );
+  }
+
   function settleHand() {
     if (!hand) return;
-    if (preview && C.canPlace(match.local, preview.x, preview.y, hand.ship.size, hand.horizontal, hand.ship.id)) {
+    if (preview && handIssue(preview.x, preview.y) === "") {
       hand.ship.x = preview.x;
       hand.ship.y = preview.y;
       hand.ship.horizontal = hand.horizontal;
@@ -870,15 +1005,19 @@
     };
     ship.lifted = true;
     preview = { x: ship.x, y: ship.y };
+    lastPlaceTag = "";
     hudDirty = true;
-    say(ship.name + " arriba. La proa es el punto blanco. Arrastrá o tocá dónde soltarla.");
+    const where = ship.kind === "tanque" ? "Solo tierra." : "Solo agua.";
+    say(ship.name + " arriba. La proa es el punto blanco. " + where + " Verde entra, rojo no.");
   }
 
   function tryDrop(cell) {
     if (!hand || !cell) return;
-    const ok = C.canPlace(match.local, cell.x, cell.y, hand.ship.size, hand.horizontal, hand.ship.id);
-    if (!ok) {
-      say("Ahí no entra. Rotá o elegí otra proa.");
+    const issue = handIssue(cell.x, cell.y);
+    if (issue) {
+      say(ISSUE_TEXT[issue] || "Ahí no entra.");
+      trauma = Math.min(1, trauma + 0.45);
+      hudDirty = true;
       return;
     }
     hand.ship.x = cell.x;
@@ -893,9 +1032,9 @@
 
   function onPointerDown(e) {
     if (!match) return;
-    const cell = cellFromEvent(e);
     if (match.phase === "place") {
       if (sealed) return;
+      const cell = cellFromEvent(e, !!hand);
       if (!cell) return;
       e.preventDefault();
       if (hand) {
@@ -907,6 +1046,7 @@
         preview = { x: cell.x, y: cell.y };
         return;
       }
+      if (!C.inBounds(cell.x, cell.y)) return;
       const ship = C.shipAt(match.local, cell.x, cell.y);
       if (!ship) return;
       lift(ship, cell);
@@ -915,6 +1055,7 @@
       moved = false;
       return;
     }
+    const cell = cellFromEvent(e);
     if (match.phase === "defend" || match.phase === "resolving" || match.phase === "wait" || match.phase === "sealed") {
       say(match.phase === "sealed" ? "Flota cerrada. Esperando para empezar." : match.phase === "wait" ? "Esperá a que cierre la otra flota." : "Ahora no: están disparando sobre tu parque.");
       return;
@@ -927,15 +1068,22 @@
   }
 
   function onPointerMove(e) {
-    const cell = cellFromEvent(e);
+    const placing = match && match.phase === "place" && hand;
+    const cell = cellFromEvent(e, !!placing);
     if (match && match.phase === "attack") {
       preview = cell;
       return;
     }
     if (!dragging || !hand || !cell) return;
     const origin = { x: cell.x - hand.grabDx, y: cell.y - hand.grabDy };
-    if (origin.x !== preview.x || origin.y !== preview.y) moved = true;
+    if (!preview || origin.x !== preview.x || origin.y !== preview.y) moved = true;
     preview = origin;
+    const issue = handIssue(origin.x, origin.y);
+    const tag = issue || "ok";
+    if (tag !== lastPlaceTag) {
+      lastPlaceTag = tag;
+      say(issue ? ISSUE_TEXT[issue] : "Verde: entra entera. Soltá para apoyarla.");
+    }
   }
 
   function onPointerUp() {
@@ -1101,6 +1249,7 @@
       if (C.MAPS[msg.map]) opts.map = msg.map;
       if (C.FLEETS[msg.terrain]) opts.terrain = msg.terrain;
       if (C.NATIONS[msg.nation]) opts.nation = msg.nation;
+      if (typeof msg.crop === "number") opts.crop = ((msg.crop % 5) + 5) % 5;
       applyTheme();
       freshMatch("inv");
       showBattle();
@@ -1184,7 +1333,7 @@
   }
 
   function sendHello() {
-    send({ t: "hello", map: opts.map, terrain: opts.terrain, nation: opts.nation });
+    send({ t: "hello", map: opts.map, terrain: opts.terrain, nation: opts.nation, crop: opts.crop || 0 });
   }
 
   function noteMenu(text) {
@@ -1296,6 +1445,7 @@
     const j = juke();
     if (j) j.start();
     blip();
+    opts.crop = Math.floor(Math.random() * 5);
     applyTheme();
     if (opts.mode === "pvp") {
       if (!window.Peer) {
@@ -1422,7 +1572,8 @@
     hand.horizontal = !hand.horizontal;
     hand.grabDx = 0;
     hand.grabDy = 0;
-    say((hand.horizontal ? "Horizontal. " : "Vertical. ") + hand.ship.name + ". Soltala en una celda libre.");
+    const issue = preview ? handIssue(preview.x, preview.y) : "";
+    say(issue ? ISSUE_TEXT[issue] : (hand.horizontal ? "Horizontal. " : "Vertical. ") + hand.ship.name + ". Verde entra, rojo no.");
     blip();
   });
   ui.ready.addEventListener("click", () => markReady());
@@ -1465,7 +1616,11 @@
     phase: match.phase,
     view: viewKind(),
     ships: match.local.map((s) => s.name + (s.lifted ? "*" : "")).join(","),
+    units: match.local.map((s) => ({ name: s.name, kind: s.kind, x: s.x, y: s.y, size: s.size, horizontal: s.horizontal, lifted: !!s.lifted })),
     lifted: !!hand,
+    terrain: opts.terrain,
+    crop: opts.crop,
+    map: opts.map,
     hp: hpOf(match.local, match.hitsOnLocal).left,
     powers: { ...match.powers },
     shield: match.shield,
