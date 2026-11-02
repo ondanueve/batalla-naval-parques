@@ -1,49 +1,19 @@
 # Parques en Guerra
 
-**🌐 Jugá ahora:** https://ondanueve.github.io/batalla-naval-parques/
+Batalla territorial en los parques nacionales argentinos. Un jugador es siempre Argentina. El otro es un invasor: Chile, Reino Unido, EE.UU., China, Rusia o Brasil.
 
-**Batalla territorial modernizada** estilo RPG Pokémon, ambientada en los 3 Parques Nacionales Argentinos más populares:
+Tres mapas: Nahuel Huapi, Iguazú y Los Glaciares. El terreno puede ser agua, tierra o mixto.
 
-- 🏞️ **Nahuel Huapi** (lagos, bosques, montañas)
-- 🌿 **Iguazú** (selva, cataratas, niebla)
-- ❄️ **Los Glaciares** (hielo, glaciares, picos)
+## Cómo se juega
 
-## Características
+1. La flota aparece al azar en una grilla de **10×20**. Hay **10 segundos** para levantarla (toque), arrastrarla o soltarla en otra celda, y rotarla.
+2. Al atacar se ve solo el territorio enemigo. Al colocar tropas o al recibir un ataque, solo el propio.
+3. **Radar** mira un área de 3×3 y no gasta el turno. **Bomba** estalla en cruz. **Camuflaje** anula el próximo ataque, sin marcar celdas.
+4. El parque revela una celda enemiga al empezar. Contra la máquina, el invasor persigue los impactos.
+5. En línea, Argentina crea la sala y comparte el enlace. Quien entra juega como invasor. Argentina dispara primero.
 
-- **1v1 PvP Online** (con enlace de invitación) y **PvC** (vs IA)
-- Un jugador siempre es **Argentina** 🇦🇷
-- El otro es el **Invasor**, a elegir entre: 🇨🇱 Chile, 🇬🇧 Reino Unido, 🇺🇸 EE.UU., 🇨🇳 China, 🇷🇺 Rusia, 🇧🇷 Brasil
-- **Terrenos**: Agua, Tierra o Mixto (unidades cambian según el terreno)
-- Mecánicas nuevas: poderes especiales (Radar, Bomba, Camuflaje)
-- Optimizado para celulares (touch, responsive)
-- Visualmente atractiva, colores vibrantes estilo Pokémon
-- **Jukebox** copiado y adaptado de [choppy-bitcoin](https://github.com/ondanueve/choppy-bitcoin)
+## Jukebox
 
-## Cómo jugar
+Adaptada de choppy-bitcoin: temas en ABC, shuffle y repeat prendidos, volumen bajo. El navegador pide un toque para soltar el audio; después sigue sola.
 
-1. Elegí el mapa (parque)
-2. Elegí el terreno (Agua / Tierra / Mixto)
-3. Elegí el modo: PvP Online o PvC
-4. Elegí la nación invasora
-5. En PvP, compartí el enlace de invitación
-6. Dispará por turnos. Usá poderes limitados.
-
-### Unidades (según terreno)
-- **Agua**: Portaaviones, Acorazado, Crucero, Submarino, Destructor
-- **Tierra**: Tanque Pesado, Blindado, Artillería, Vehículo, Infantería
-- **Mixto**: Unidades anfibias y de patrulla
-
-## Desarrollo local
-
-```bash
-python3 -m http.server 8080
-# Abrí http://localhost:8080
-```
-
-## Créditos
-
-- Inspirado en los Parques Nacionales de Argentina
-- Jukebox basado en el de choppy-bitcoin
-- Estilo visual: Pokémon RPG
-
-MIT License
+MIT

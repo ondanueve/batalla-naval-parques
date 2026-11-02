@@ -1,137 +1,311 @@
-// audio.js - Jukebox
-(() => {
+/* Jukebox al estilo de choppy-bitcoin: ABCJS, shuffle, repeat, volumen bajo.
+   El navegador no suelta audio hasta el primer gesto: se intenta al cargar
+   y, si falla, arranca en el primer toque. El buffer pasa por un GainNode. */
+(function () {
+  const ABCJS_SRC = "https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.7.0/abcjs-basic-min.js";
+  const SONGS = {
+    bonny: {
+      title: "Bonny at Morn",
+      abc: `X:1
+T:Bonny at Morn
+C:Traditional Northumbrian
+M:3/4
+L:1/8
+Q:1/4=76
+K:Em
+%%MIDI program 73
+E2 | "Em"B3 c BA | B2 E2 FG | "D"A3 G FE | D2 E2 F2 | "Em"B3 c BA | B2 E2 FG | "D"A2 F2 D2 | "Em"E4 E2 |
+"Em"B3 c BA | B2 E2 FG | "D"A3 G FE | D2 E2 F2 | "Em"ED EF GA | B2 e2 d2 | "Bm"B d3 F2 | "Em"E6 |]`
+    },
+    shady: {
+      title: "Shady Grove",
+      abc: `X:1
+T:Shady Grove
+C:Traditional
+M:4/4
+L:1/8
+Q:1/4=112
+K:Edor
+%%MIDI program 71
+"Em"E2 G2 A2 B2 A2 G2 | "D"E2 D2 E4 E2 D2 | "Em"E2 G2 A2 B2 A2 G2 | "D"A6 G2 |
+"Em"E2 G2 A2 B2 A2 G2 | "D"E2 D2 E2 D2 | "Em"E2 G2 "D"F2 D2 "Em"E8 |]`
+    },
+    ode: {
+      title: "Ode to Joy",
+      abc: `X:1
+T:Ode to Joy
+C:Ludwig van Beethoven
+M:4/4
+L:1/4
+Q:1/4=120
+K:C
+%%MIDI program 56
+"C"G G G A | G A B2 | "G"A A B A | "C"G2 G2 | "C"G G G A | G A B2 | "G"A A B A | "C"G2 G2 |]`
+    },
+    fisher: {
+      title: "Fisher's Hornpipe",
+      abc: `X:1
+T:Fisher's Hornpipe
+C:James A. Fishar
+M:C|
+L:1/8
+Q:1/2=84
+K:D
+%%MIDI program 71
+|: dc | "D"dAFA GBAG | FAFA GBAG | "D"FDFD "A"GEGE | "D"FDFD "A"E2 dc |
+"D"dAFA GBAG | FAFA GBAG | "D"FAdf "A"gecA | "D"d2 d2 d2 :|`
+    }
+  };
+
   let ctx = null;
-  let jukeOn = false;
-  let jukeVol = 0.2;
-  let jukeGainNode = null;
-  let abcSynth = null;
-  let jukeGen = 0;
+  let musicGain = null;
+  let sfxGain = null;
+  let src = null;
+  let vol = 0.18;
   let shuffle = true;
   let repeat = true;
-  let playlist = [];
-  let playlistIndex = 0;
-  let started = false;
+  let order = [];
+  let index = 0;
+  let token = 0;
+  let playing = false;
+  let want = false;
+  let booting = false;
+  let currentId = null;
+  let abcPromise = null;
+
+  function paper() {
+    let el = document.getElementById("juke-paper");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "juke-paper";
+      el.setAttribute("aria-hidden", "true");
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  function ensureCtx() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!ctx) {
+      ctx = new AC();
+      musicGain = ctx.createGain();
+      sfxGain = ctx.createGain();
+      musicGain.gain.value = vol;
+      sfxGain.gain.value = 0.45;
+      musicGain.connect(ctx.destination);
+      sfxGain.connect(ctx.destination);
+    }
+    return ctx;
+  }
 
   function unlock() {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    if (!ctx) ctx = new AC();
-    if (ctx.state !== "running") ctx.resume();
+    const c = ensureCtx();
+    if (c && c.state === "suspended") c.resume();
+    return c;
   }
 
-  const ABCJS_SRC = "https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.7.0/abcjs-basic-min.js";
-  function ensureAbc() {
+  function loadAbc() {
     if (window.ABCJS) return Promise.resolve(window.ABCJS);
-    return new Promise((resolve) => {
+    if (abcPromise) return abcPromise;
+    abcPromise = new Promise((resolve, reject) => {
       const s = document.createElement("script");
       s.src = ABCJS_SRC;
+      s.crossOrigin = "anonymous";
       s.onload = () => resolve(window.ABCJS);
+      s.onerror = () => reject(new Error("abcjs"));
       document.head.appendChild(s);
     });
+    return abcPromise;
   }
 
-  const BONNY_ABC = `X:1\nT:Bonny at Morn\nM:3/4\nL:1/8\nQ:1/4=76\nK:Em\nE2 | "Em"B3 c BA | B2 E2 FG | "D"A3 G FE | D2 E2 F2 | "Em"B3 c BA | B2 E2 FG | "D"A2 F2 D2 | "Em"E4 E2 |]`;
-  const SHADY_ABC = `X:1\nT:Shady Grove\nM:4/4\nL:1/8\nQ:1/4=112\nK:Edor\n"Em"E2 G2 A2 B2 A2 G2 | "D"E2 D2 E4 E2 D2 | "Em"E2 G2 A2 B2 A2 G2 | "D"E2 D2 E4 E4 |]`;
-  const ODE_ABC = `X:1\nT:Ode to Joy\nM:4/4\nL:1/4\nQ:1/4=120\nK:C\n"C"G G G A | G A B2 | "G"A A B A | "C"G2 G2 |]`;
+  function emit() {
+    const song = currentId ? SONGS[currentId] : null;
+    window.dispatchEvent(new CustomEvent("juke", {
+      detail: {
+        playing: playing && want,
+        title: song ? song.title : "—",
+        vol, shuffle, repeat
+      }
+    }));
+  }
 
-  const SONGS = {
-    bonny: { id: "bonny", title: "Bonny at Morn", abc: BONNY_ABC },
-    shady: { id: "shady", title: "Shady Grove", abc: SHADY_ABC },
-    ode: { id: "ode", title: "Ode to Joy", abc: ODE_ABC }
-  };
+  function stopSource() {
+    token++;
+    if (!src) return;
+    try { src.onended = null; } catch (e) {}
+    try { src.stop(); } catch (e) {}
+    try { src.disconnect(); } catch (e) {}
+    src = null;
+  }
 
-  function buildPlaylist() {
-    playlist = Object.keys(SONGS);
+  function buildOrder() {
+    order = Object.keys(SONGS);
     if (shuffle) {
-      for (let i = playlist.length - 1; i > 0; i--) {
+      for (let i = order.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [playlist[i], playlist[j]] = [playlist[j], playlist[i]];
+        const tmp = order[i];
+        order[i] = order[j];
+        order[j] = tmp;
       }
     }
-    playlistIndex = 0;
+    index = 0;
   }
 
-  async function playNext() {
-    if (!playlist.length) buildPlaylist();
-    if (playlistIndex >= playlist.length) {
-      if (repeat) {
-        if (shuffle) buildPlaylist();
-        else playlistIndex = 0;
-      } else return;
+  function advance() {
+    if (!want) return;
+    if (!repeat) {
+      playing = false;
+      want = false;
+      emit();
+      return;
     }
-    const id = playlist[playlistIndex++];
-    await jukePlay(id);
+    index++;
+    if (index >= order.length) {
+      if (shuffle) buildOrder();
+      else index = 0;
+    }
+    playAt(index);
   }
 
-  async function jukePlay(id) {
-    unlock();
-    await ensureAbc();
-    if (!window.ABCJS) return;
-    const song = SONGS[id] || SONGS.bonny;
-    jukeOn = true;
-    const gen = ++jukeGen;
+  async function playAt(i) {
+    const c = ensureCtx();
+    if (!c) return false;
+    if (c.state === "suspended") {
+      try { await c.resume(); } catch (e) {}
+    }
+    if (c.state !== "running") return false;
+    const id = order[i] || order[0];
+    if (!id) return false;
+    currentId = id;
+    const gen = ++token;
     try {
-      const vis = window.ABCJS.renderAbc("ode-hold", song.abc);
-      if (!vis || !vis[0]) return;
-      const synth = new window.ABCJS.synth.CreateSynth();
-      await synth.init({ visualObj: vis[0], audioContext: ctx });
+      const ABCJS = await loadAbc();
+      if (gen !== token || !want) return false;
+      const visual = ABCJS.renderAbc(paper(), SONGS[id].abc, { add_classes: false, staffwidth: 480 })[0];
+      if (!visual) throw new Error("sin partitura");
+      const synth = new ABCJS.synth.CreateSynth();
+      await synth.init({ visualObj: visual, audioContext: c });
       await synth.prime();
-      if (gen !== jukeGen) return;
-      if (abcSynth && abcSynth.stop) try { abcSynth.stop(); } catch (e) {}
-      abcSynth = synth;
-      synth.start();
-      setTimeout(() => {
-        if (jukeOn && gen === jukeGen) playNext();
-      }, 10000);
-    } catch (e) {
-      console.warn("Juke error", e);
+      if (gen !== token || !want) return false;
+      const buf = (synth.getAudioBuffer && synth.getAudioBuffer()) || synth.audioBuffer || null;
+      if (!buf) throw new Error("sin buffer");
+      if (src) {
+        try { src.onended = null; src.stop(); } catch (e) {}
+      }
+      const node = c.createBufferSource();
+      node.buffer = buf;
+      node.connect(musicGain);
+      musicGain.gain.value = vol;
+      node.onended = () => {
+        if (gen !== token || !want) return;
+        playing = false;
+        advance();
+      };
+      src = node;
+      node.start();
+      playing = true;
+      emit();
+      return true;
+    } catch (err) {
+      console.warn("jukebox", err);
+      if (gen === token && want) setTimeout(advance, 600);
+      return false;
     }
   }
 
-  function jukeStop() {
-    jukeOn = false;
-    jukeGen++;
-    if (abcSynth && abcSynth.stop) try { abcSynth.stop(); } catch (e) {}
+  function start() {
+    unlock();
+    if ((playing && want) || booting) return;
+    if (!order.length) buildOrder();
+    want = true;
+    booting = true;
+    playAt(index).finally(() => { booting = false; });
   }
 
-  function startJuke() {
-    if (started) return;
-    started = true;
-    jukeVol = 0.2;
-    buildPlaylist();
-    playNext();
+  function stop() {
+    want = false;
+    playing = false;
+    booting = false;
+    stopSource();
+    emit();
   }
 
-  window.ArcadeAudio = {
-    unlock,
-    SONGS,
-    jukePlay,
-    jukeStop,
-    startJuke,
-    jukePlaying: () => jukeOn,
-    setJukeVolume: (v) => { jukeVol = Math.max(0, Math.min(1, v)); if (jukeGainNode) jukeGainNode.gain.value = jukeVol; },
-    jukeVolume: () => jukeVol
+  function setVol(v) {
+    vol = Math.max(0, Math.min(1, Number(v)));
+    if (musicGain) musicGain.gain.value = vol;
+    emit();
+  }
+
+  function tone(freq, dur, type, gainV, slide) {
+    const c = unlock();
+    if (!c || c.state !== "running" || !sfxGain) return;
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = type || "sine";
+    o.frequency.setValueAtTime(freq, c.currentTime);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, slide), c.currentTime + dur);
+    g.gain.setValueAtTime(gainV, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    o.connect(g);
+    g.connect(sfxGain);
+    o.start();
+    o.stop(c.currentTime + dur + 0.02);
+  }
+
+  const sfx = {
+    ui() { tone(660, 0.05, "square", 0.07); },
+    miss() { tone(520, 0.12, "sine", 0.1, 220); },
+    hit() {
+      tone(180, 0.18, "sawtooth", 0.16, 55);
+      tone(90, 0.26, "triangle", 0.18, 40);
+    },
+    sunk() {
+      tone(392, 0.1, "square", 0.1);
+      setTimeout(() => tone(523, 0.1, "square", 0.1), 90);
+      setTimeout(() => tone(659, 0.2, "square", 0.12), 180);
+    },
+    shield() { tone(880, 0.16, "triangle", 0.1, 1320); },
+    alarm() {
+      if (musicGain) {
+        const now = musicGain.gain.value;
+        musicGain.gain.value = Math.min(now, vol * 0.25);
+        setTimeout(() => { if (musicGain && want) musicGain.gain.value = vol; }, 520);
+      }
+      tone(150, 0.16, "sawtooth", 0.14, 70);
+      setTimeout(() => tone(110, 0.22, "sawtooth", 0.12, 50), 140);
+    }
   };
 
-  if (!document.getElementById("ode-hold")) {
-    const el = document.createElement("div");
-    el.id = "ode-hold";
-    el.hidden = true;
-    document.body.appendChild(el);
-  }
+  window.Juke = {
+    SONGS, start, stop, unlock, setVol,
+    volume: () => vol,
+    setShuffle(v) { shuffle = !!v; if (shuffle) buildOrder(); emit(); },
+    setRepeat(v) { repeat = !!v; emit(); },
+    next() {
+      if (!order.length) buildOrder();
+      want = true;
+      index++;
+      if (index >= order.length) {
+        if (shuffle) buildOrder();
+        else index = 0;
+      }
+      playAt(index);
+    },
+    sfx,
+    state: () => ({
+      playing: playing && want,
+      title: currentId ? SONGS[currentId].title : "—",
+      vol, shuffle, repeat,
+      ctx: ctx ? ctx.state : "off"
+    })
+  };
 
-  // Try autoplay immediately on load
-  function tryAutoplay() {
-    if (started) return;
-    startJuke();
-  }
-  window.addEventListener("load", tryAutoplay);
-  setTimeout(tryAutoplay, 300);
-  setTimeout(tryAutoplay, 1000);
-
-  // Fallback on any interaction
-  const start = () => { if (!started) startJuke(); };
-  document.addEventListener("click", start, { once: true });
-  document.addEventListener("touchstart", start, { once: true });
-  document.addEventListener("keydown", start, { once: true });
+  const kick = () => start();
+  document.addEventListener("pointerdown", kick, { capture: true });
+  document.addEventListener("keydown", kick, { capture: true });
+  window.addEventListener("load", () => setTimeout(start, 280));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && want) unlock();
+  });
 })();

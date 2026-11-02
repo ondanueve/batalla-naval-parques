@@ -2,92 +2,125 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Parques en Guerra 🇦🇷</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#071018">
+  <title>Parques en Guerra</title>
   <link rel="stylesheet" href="style.css">
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&family=Press+Start+2P&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
-<body>
-  <div id="menu" class="screen">
-    <h1>🌲 Parques en Guerra</h1>
-    <p>RPG Pokémon · Parques Argentinos</p>
-    <div class="options">
-      <h2>Mapa</h2>
-      <div class="maps">
-        <button class="map-btn selected" data-map="nahuel">🏞️ Nahuel Huapi</button>
-        <button class="map-btn" data-map="iguazu">🌿 Iguazú</button>
-        <button class="map-btn" data-map="glaciares">❄️ Los Glaciares</button>
+<body data-map="nahuel" data-terrain="agua">
+  <div id="app">
+    <section id="menu" class="screen">
+      <header class="hero">
+        <div class="hero-art" aria-hidden="true"></div>
+        <h1>PARQUES<br>EN GUERRA</h1>
+        <p class="lede">Argentina defiende el parque. Del otro lado, el invasor.</p>
+      </header>
+      <div class="scroll">
+        <div class="block">
+          <h2>Parque</h2>
+          <div class="stack" id="maps">
+            <button type="button" class="map-card selected" data-map="nahuel">
+              <i class="banner nahuel"></i>
+              <span><b>Nahuel Huapi</b><small>Lago, bosque y viento</small></span>
+            </button>
+            <button type="button" class="map-card" data-map="iguazu">
+              <i class="banner iguazu"></i>
+              <span><b>Iguazú</b><small>Selva y cataratas</small></span>
+            </button>
+            <button type="button" class="map-card" data-map="glaciares">
+              <i class="banner glaciares"></i>
+              <span><b>Los Glaciares</b><small>Hielo y silencio</small></span>
+            </button>
+          </div>
+        </div>
+        <div class="block">
+          <h2>Terreno</h2>
+          <div class="row" id="terrains">
+            <button type="button" class="seg selected" data-terrain="agua">Agua</button>
+            <button type="button" class="seg" data-terrain="tierra">Tierra</button>
+            <button type="button" class="seg" data-terrain="mixto">Mixto</button>
+          </div>
+          <p class="hint" id="terrain-hint">Flota naval sobre el lago.</p>
+        </div>
+        <div class="block">
+          <h2>Modo</h2>
+          <div class="row" id="modes">
+            <button type="button" class="seg selected" data-mode="pvc">Contra la máquina</button>
+            <button type="button" class="seg" data-mode="pvp">Invitar a alguien</button>
+          </div>
+        </div>
+        <div class="block">
+          <h2>Invasor</h2>
+          <div class="row" id="nations"></div>
+        </div>
+        <ol class="steps">
+          <li>Grilla 10×20. La flota ya está puesta: tenés 10 segundos para moverla.</li>
+          <li>Al atacar ves solo al enemigo. Cuando te atacan, ves solo lo tuyo.</li>
+          <li>Radar mira sin gastar el turno. Bomba estalla en cruz. Camuflaje anula un ataque.</li>
+        </ol>
       </div>
-      <h2>Terreno</h2>
-      <div class="terrains">
-        <button class="terrain-btn selected" data-terrain="agua">💧 Agua</button>
-        <button class="terrain-btn" data-terrain="tierra">🏔️ Tierra</button>
-        <button class="terrain-btn" data-terrain="mixto">🌊 Mixto</button>
-      </div>
-      <h2>Modo</h2>
-      <div class="modes">
-        <button id="mode-pvp" class="mode-btn">👥 PvP Online</button>
-        <button id="mode-pvc" class="mode-btn selected">🤖 PvC (IA)</button>
-      </div>
-      <h2>Invasor</h2>
-      <select id="invader">
-        <option value="chile">🇨🇱 Chile</option>
-        <option value="uk">🇬🇧 Reino Unido</option>
-        <option value="usa">🇺🇸 EE.UU.</option>
-        <option value="china">🇨🇳 China</option>
-        <option value="rusia">🇷🇺 Rusia</option>
-        <option value="brasil">🇧🇷 Brasil</option>
-      </select>
-      <button id="start-btn" class="big">¡Comenzar Batalla!</button>
-      <div id="invite-box" class="hidden">
-        <p>Compartí este enlace:</p>
-        <input id="invite-link" readonly>
-        <button id="copy-link">Copiar enlace</button>
-        <p id="waiting">Esperando al rival...</p>
-      </div>
-    </div>
-    <button id="juke-btn" style="margin-top:0.5rem">🎵 Jukebox</button>
-  </div>
+      <footer class="dock">
+        <button type="button" class="go" id="start">Entrar al parque</button>
+      </footer>
+    </section>
 
-  <div id="game" class="screen hidden">
-    <div class="hud">
-      <div class="player argentina">🇦🇷 <span id="arg-hp">100</span></div>
-      <div class="turn" id="turn-indicator">Turno 🇦🇷</div>
-      <div class="player invader">Inv <span id="inv-hp">100</span></div>
-    </div>
-    <div id="timer" class="hidden">10</div>
-    <div class="boards">
-      <div class="board-container">
-        <h3>Tu Territorio</h3>
-        <canvas id="own-board" width="280" height="520"></canvas>
+    <section id="battle" class="screen hidden">
+      <header class="hud">
+        <div class="plate" id="plate-arg">
+          <div class="who"><b>ARGENTINA</b><span id="tag-arg" class="you-tag hidden">VOS</span></div>
+          <div class="hp-line"><em>HP</em><div class="bar" id="bar-arg"><i></i></div><strong id="hp-arg">17/17</strong></div>
+        </div>
+        <div class="plate" id="plate-inv">
+          <div class="who"><b id="inv-name">INVASOR</b><span id="tag-inv" class="you-tag hidden">VOS</span></div>
+          <div class="hp-line"><em>HP</em><div class="bar" id="bar-inv"><i></i></div><strong id="hp-inv">17/17</strong></div>
+        </div>
+        <button type="button" id="juke-fab" aria-label="Jukebox">♪</button>
+      </header>
+      <div id="stage">
+        <div id="board-label">Tu territorio</div>
+        <div id="pips"></div>
+        <canvas id="board" width="300" height="560"></canvas>
+        <div id="clock" class="hidden">10</div>
+        <div id="incoming">TE ATACAN</div>
+        <div id="end" class="hidden">
+          <h2 id="end-title">Fin</h2>
+          <button type="button" class="go" id="again">Volver al menú</button>
+        </div>
       </div>
-      <div class="board-container">
-        <h3>Enemigo</h3>
-        <canvas id="enemy-board" width="280" height="520"></canvas>
+      <div id="linkbox" class="hidden">
+        <input id="link" readonly aria-label="Enlace de invitación">
+        <button type="button" id="copy">Copiar</button>
       </div>
-    </div>
-    <div class="controls">
-      <button id="rotate-btn" class="hidden">🔄 Rotar</button>
-    </div>
-    <div class="powers">
-      <button id="power-radar">📡 Radar</button>
-      <button id="power-bomb">💣 Bomba</button>
-      <button id="power-camo">👻 Camo</button>
-    </div>
-    <div id="message">Tocá una unidad para moverla</div>
-    <button id="back-btn">Menú</button>
+      <div class="tools" id="tools">
+        <button type="button" id="radar" disabled>Radar 2</button>
+        <button type="button" id="bomb" disabled>Bomba 1</button>
+        <button type="button" id="camo" disabled>Camu 1</button>
+        <button type="button" id="rotate" class="hidden">Rotar</button>
+        <button type="button" id="ready" class="hidden">Listo</button>
+      </div>
+      <div id="dialogue">Elegí parque, terreno e invasor.</div>
+      <button type="button" id="back">Menú</button>
+    </section>
   </div>
-
-  <div id="juke-panel" class="panel hidden">
-    <h2>🎵 Jukebox</h2>
-    <select id="song-select"></select>
-    <button id="play-juke">▶</button>
-    <button id="stop-juke">⏹</button>
-    <input type="range" id="vol-juke" min="0" max="1" step="0.1" value="0.2">
-    <button id="close-juke">Cerrar</button>
+  <div id="hurt"></div>
+  <div id="juke-panel" class="hidden" role="dialog" aria-label="Jukebox">
+    <h2>JUKEBOX</h2>
+    <p id="juke-title">Buscando señal…</p>
+    <div class="badges">
+      <button type="button" id="juke-shuffle" aria-pressed="true">Shuffle ON</button>
+      <button type="button" id="juke-repeat" aria-pressed="true">Repeat ON</button>
+    </div>
+    <input id="juke-vol" type="range" min="0" max="1" step="0.01" value="0.18" aria-label="Volumen">
+    <div class="tools">
+      <button type="button" id="juke-play">Play</button>
+      <button type="button" id="juke-next">Otra</button>
+      <button type="button" id="juke-stop">Stop</button>
+    </div>
+    <button type="button" class="ghost" id="juke-close" style="width:100%;margin-top:8px">Cerrar</button>
   </div>
-
+  <script src="core.js"></script>
   <script src="audio.js"></script>
   <script src="game.js"></script>
 </body>
