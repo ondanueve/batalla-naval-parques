@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Batalla Naval Parques 🇦🇷</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="menu" class="screen">
+    <h1>🌊 Batalla Naval Parques</h1>
+    <p>Estilo RPG Pokémon · Parques Nacionales Argentinos</p>
+    <div class="options">
+      <h2>Mapa</h2>
+      <div class="maps">
+        <button class="map-btn" data-map="nahuel">🏞️ Nahuel Huapi</button>
+        <button class="map-btn" data-map="iguazu">🌿 Iguazú</button>
+        <button class="map-btn" data-map="glaciares">❄️ Los Glaciares</button>
+      </div>
+      <h2>Modo</h2>
+      <button id="mode-pvp">👥 PvP (1v1)</button>
+      <button id="mode-pvc">🤖 PvC (vs IA)</button>
+      <h2>Invasor</h2>
+      <select id="invader">
+        <option value="chile">🇨🇱 Chile</option>
+        <option value="uk">🇬🇧 Reino Unido</option>
+        <option value="usa">🇺🇸 EE.UU.</option>
+        <option value="china">🇨🇳 China</option>
+        <option value="rusia">🇷🇺 Rusia</option>
+        <option value="brasil">🇧🇷 Brasil</option>
+      </select>
+      <button id="start-btn" class="big">¡Comenzar Batalla!</button>
+    </div>
+    <button id="juke-btn">🎵 Jukebox</button>
+  </div>
+
+  <div id="game" class="screen hidden">
+    <div class="hud">
+      <div class="player argentina">🇦🇷 Argentina <span id="arg-hp">100</span></div>
+      <div class="turn" id="turn-indicator">Turno de Argentina</div>
+      <div class="player invader">Invasor <span id="inv-hp">100</span></div>
+    </div>
+    <div class="boards">
+      <div class="board-container">
+        <h3>Tu Flota</h3>
+        <canvas id="own-board" width="400" height="400"></canvas>
+      </div>
+      <div class="board-container">
+        <h3>Flota Enemiga</h3>
+        <canvas id="enemy-board" width="400" height="400"></canvas>
+      </div>
+    </div>
+    <div class="powers">
+      <button id="power-radar">📡 Radar (2)</button>
+      <button id="power-bomb">💣 Bomba (1)</button>
+      <button id="power-camo">👻 Camuflaje (2)</button>
+    </div>
+    <div id="message">Colocá tus barcos</div>
+    <button id="back-btn">Volver al menú</button>
+  </div>
+
+  <div id="juke-panel" class="panel hidden">
+    <h2>🎵 Jukebox</h2>
+    <select id="song-select"></select>
+    <button id="play-juke">▶ Play</button>
+    <button id="stop-juke">⏹ Stop</button>
+    <input type="range" id="vol-juke" min="0" max="1" step="0.1" value="0.8">
+    <button id="close-juke">Cerrar</button>
+  </div>
+
+  <script src="audio.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
