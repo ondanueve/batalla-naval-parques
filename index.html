@@ -15,9 +15,9 @@
     <div class="options">
       <h2>Mapa</h2>
       <div class="maps">
-        <button class="map-btn selected" data-map="nahuel">🏞️ Nahuel</button>
+        <button class="map-btn selected" data-map="nahuel">🏞️ Nahuel Huapi</button>
         <button class="map-btn" data-map="iguazu">🌿 Iguazú</button>
-        <button class="map-btn" data-map="glaciares">❄️ Glaciares</button>
+        <button class="map-btn" data-map="glaciares">❄️ Los Glaciares</button>
       </div>
       <h2>Terreno</h2>
       <div class="terrains">
@@ -27,27 +27,27 @@
       </div>
       <h2>Modo</h2>
       <div class="modes">
-        <button id="mode-pvp" class="mode-btn">👥 PvP</button>
-        <button id="mode-pvc" class="mode-btn selected">🤖 PvC</button>
+        <button id="mode-pvp" class="mode-btn">👥 PvP Online</button>
+        <button id="mode-pvc" class="mode-btn selected">🤖 PvC (IA)</button>
       </div>
       <h2>Invasor</h2>
       <select id="invader">
         <option value="chile">🇨🇱 Chile</option>
-        <option value="uk">🇬🇧 UK</option>
-        <option value="usa">🇺🇸 USA</option>
+        <option value="uk">🇬🇧 Reino Unido</option>
+        <option value="usa">🇺🇸 EE.UU.</option>
         <option value="china">🇨🇳 China</option>
         <option value="rusia">🇷🇺 Rusia</option>
         <option value="brasil">🇧🇷 Brasil</option>
       </select>
-      <button id="start-btn" class="big">¡Comenzar!</button>
+      <button id="start-btn" class="big">¡Comenzar Batalla!</button>
       <div id="invite-box" class="hidden">
-        <p>Compartí el enlace:</p>
+        <p>Compartí este enlace:</p>
         <input id="invite-link" readonly>
-        <button id="copy-link">Copiar</button>
-        <p id="waiting">Esperando...</p>
+        <button id="copy-link">Copiar enlace</button>
+        <p id="waiting">Esperando al rival...</p>
       </div>
     </div>
-    <button id="juke-btn" style="margin-top:0.4rem">🎵 Jukebox</button>
+    <button id="juke-btn" style="margin-top:0.5rem">🎵 Jukebox</button>
   </div>
 
   <div id="game" class="screen hidden">
@@ -56,14 +56,15 @@
       <div class="turn" id="turn-indicator">Turno 🇦🇷</div>
       <div class="player invader">Inv <span id="inv-hp">100</span></div>
     </div>
+    <div id="timer" class="hidden">10</div>
     <div class="boards">
       <div class="board-container">
         <h3>Tu Territorio</h3>
-        <canvas id="own-board" width="280" height="280"></canvas>
+        <canvas id="own-board" width="300" height="300"></canvas>
       </div>
       <div class="board-container">
         <h3>Enemigo</h3>
-        <canvas id="enemy-board" width="280" height="280"></canvas>
+        <canvas id="enemy-board" width="300" height="300"></canvas>
       </div>
     </div>
     <div class="controls">
@@ -74,7 +75,7 @@
       <button id="power-bomb">💣 Bomba</button>
       <button id="power-camo">👻 Camo</button>
     </div>
-    <div id="message">Tocá tu tablero para colocar</div>
+    <div id="message">Tocá una unidad para moverla</div>
     <button id="back-btn">Menú</button>
   </div>
 

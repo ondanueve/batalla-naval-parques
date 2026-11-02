@@ -33,10 +33,10 @@ let state = {
   currentPlayer: "arg",
   boards: { arg: null, inv: null },
   powers: { radar: 2, bomb: 1, camo: 2 },
-  placing: { index: 0, horizontal: true },
+  selectedUnit: null, // { id, size, horizontal, cells: [{x,y}] }
   peer: null,
   conn: null,
-  isHost: false
+  placeTimer: null
 };
 
 const ownCanvas = document.getElementById("own-board");
@@ -49,7 +49,6 @@ function getUnits() {
 }
 
 function createBoard() {
-  // Fix: each cell must be a unique object
   return Array.from({ length: GRID }, () =>
     Array.from({ length: GRID }, () => ({ unit: null, hit: false, miss: false }))
   );
@@ -59,11 +58,11 @@ function placeUnitsRandom(board) {
   getUnits().forEach((unit, idx) => {
     let placed = false;
     let attempts = 0;
-    while (!placed && attempts < 100) {
+    while (!placed && attempts < 150) {
       const horizontal = Math.random() > 0.5;
       const x = Math.floor(Math.random() * (horizontal ? GRID - unit.size + 1 : GRID));
       const y = Math.floor(Math.random() * (horizontal ? GRID : GRID - unit.size + 1));
-      if (canPlace(board, x, y, unit.size, horizontal)) {
+      if (canPlace(board, x, y, unit.size, horizontal, null)) {
         placeUnit(board, x, y, unit.size, horizontal, idx);
         placed = true;
       }
@@ -73,11 +72,13 @@ function placeUnitsRandom(board) {
   return board;
 }
 
-function canPlace(board, x, y, size, horizontal) {
+function canPlace(board, x, y, size, horizontal, ignoreId = null) {
   for (let i = 0; i < size; i++) {
     const cx = horizontal ? x + i : x;
     const cy = horizontal ? y : y + i;
-    if (cx >= GRID || cy >= GRID || board[cy][cx].unit !== null) return false;
+    if (cx >= GRID || cy >= GRID) return false;
+    const cell = board[cy][cx];
+    if (cell.unit !== null && cell.unit !== ignoreId) return false;
   }
   return true;
 }
@@ -90,21 +91,45 @@ function placeUnit(board, x, y, size, horizontal, unitId) {
   }
 }
 
-function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agua", preview = null) {
+function removeUnit(board, unitId) {
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      if (board[y][x].unit === unitId) board[y][x].unit = null;
+    }
+  }
+}
+
+function getUnitCells(board, unitId) {
+  const cells = [];
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      if (board[y][x].unit === unitId) cells.push({ x, y });
+    }
+  }
+  return cells;
+}
+
+function isHorizontal(cells) {
+  if (cells.length < 2) return true;
+  return cells[0].y === cells[1].y;
+}
+
+function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agua", highlight = null) {
   const size = ctx.canvas.width;
   const cell = size / GRID;
   ctx.clearRect(0, 0, size, size);
 
+  // Base color by terrain + map
   if (terrain === "agua") {
     if (map === "nahuel") ctx.fillStyle = "#38bdf8";
     else if (map === "iguazu") ctx.fillStyle = "#22c55e";
     else ctx.fillStyle = "#bae6fd";
   } else if (terrain === "tierra") {
-    if (map === "nahuel") ctx.fillStyle = "#a3e635";
+    if (map === "nahuel") ctx.fillStyle = "#84cc16";
     else if (map === "iguazu") ctx.fillStyle = "#166534";
     else ctx.fillStyle = "#cbd5e1";
   } else {
-    ctx.fillStyle = "#64748b";
+    ctx.fillStyle = map === "glaciares" ? "#e0f2fe" : "#64748b";
   }
   ctx.fillRect(0, 0, size, size);
 
@@ -133,21 +158,14 @@ function drawBoard(ctx, board, showUnits = false, map = "nahuel", terrain = "agu
     }
   }
 
-  // Preview during placement
-  if (preview && state.phase === "place") {
-    const units = getUnits();
-    const unit = units[state.placing.index];
-    if (unit) {
-      const ok = canPlace(board, preview.x, preview.y, unit.size, state.placing.horizontal);
-      ctx.fillStyle = ok ? "rgba(34,197,94,0.7)" : "rgba(239,68,68,0.7)";
-      for (let i = 0; i < unit.size; i++) {
-        const cx = state.placing.horizontal ? preview.x + i : preview.x;
-        const cy = state.placing.horizontal ? preview.y : preview.y + i;
-        if (cx >= 0 && cx < GRID && cy >= 0 && cy < GRID) {
-          ctx.fillRect(cx * cell + 2, cy * cell + 2, cell - 4, cell - 4);
-        }
+  // Highlight selected unit or preview
+  if (highlight && highlight.cells) {
+    ctx.fillStyle = "rgba(250, 204, 21, 0.7)";
+    highlight.cells.forEach(c => {
+      if (c.x >= 0 && c.x < GRID && c.y >= 0 && c.y < GRID) {
+        ctx.fillRect(c.x * cell + 2, c.y * cell + 2, cell - 4, cell - 4);
       }
-    }
+    });
   }
 }
 
@@ -176,8 +194,7 @@ function aiShoot(board) {
     }
   }
   if (!candidates.length) return null;
-  const [x, y] = candidates[Math.floor(Math.random() * candidates.length)];
-  return { x, y };
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 // Menu
@@ -207,6 +224,7 @@ document.getElementById("mode-pvc").onclick = () => {
 };
 document.getElementById("start-btn").onclick = startGame;
 document.getElementById("back-btn").onclick = () => {
+  clearInterval(state.placeTimer);
   document.getElementById("game").classList.add("hidden");
   document.getElementById("menu").classList.remove("hidden");
   if (state.peer) try { state.peer.destroy(); } catch (e) {}
@@ -219,9 +237,10 @@ document.getElementById("copy-link").onclick = () => {
 };
 
 document.getElementById("rotate-btn").onclick = () => {
-  if (state.phase !== "place") return;
-  state.placing.horizontal = !state.placing.horizontal;
+  if (!state.selectedUnit) return;
+  state.selectedUnit.horizontal = !state.selectedUnit.horizontal;
   updatePlacementMessage();
+  drawAll();
 };
 
 function startGame() {
@@ -250,10 +269,6 @@ function setupPvP() {
     document.getElementById("waiting").textContent = "¡Rival conectado!";
     setTimeout(beginPlacement, 600);
   });
-  state.peer.on("error", err => {
-    console.error(err);
-    document.getElementById("waiting").textContent = "Error de conexión. Probá de nuevo.";
-  });
 }
 
 function setupConnection() {
@@ -272,38 +287,61 @@ function beginPlacement() {
   document.getElementById("rotate-btn").classList.remove("hidden");
   document.body.className = `map-${state.map}`;
   state.phase = "place";
-  state.placing.index = 0;
-  state.placing.horizontal = true;
+  state.selectedUnit = null;
   state.boards.arg = createBoard();
   state.boards.inv = createBoard();
+  placeUnitsRandom(state.boards.arg);
   placeUnitsRandom(state.boards.inv);
+  startPlacementTimer();
   updatePlacementMessage();
   drawAll();
 }
 
+function startPlacementTimer() {
+  let timeLeft = 10;
+  document.getElementById("timer").textContent = timeLeft;
+  document.getElementById("timer").classList.remove("hidden");
+  clearInterval(state.placeTimer);
+  state.placeTimer = setInterval(() => {
+    timeLeft--;
+    document.getElementById("timer").textContent = timeLeft;
+    if (timeLeft <= 0) {
+      clearInterval(state.placeTimer);
+      startBattle();
+    }
+  }, 1000);
+}
+
 function updatePlacementMessage() {
-  const units = getUnits();
-  if (state.placing.index >= units.length) {
-    startBattle();
-    return;
+  if (state.selectedUnit) {
+    const units = getUnits();
+    const u = units[state.selectedUnit.id];
+    document.getElementById("message").textContent = `Moviendo ${u.name} (${u.size}) | ${state.selectedUnit.horizontal ? "H" : "V"} | Tocá para soltar`;
+  } else {
+    document.getElementById("message").textContent = "Tocá una unidad para levantarla y moverla";
   }
-  const unit = units[state.placing.index];
-  const ori = state.placing.horizontal ? "Horizontal" : "Vertical";
-  document.getElementById("message").textContent = `Colocá ${unit.name} (${unit.size}) | ${ori}`;
 }
 
 function startBattle() {
-  state.phase = "battle";
-  state.currentPlayer = "arg";
+  clearInterval(state.placeTimer);
+  document.getElementById("timer").classList.add("hidden");
   document.getElementById("rotate-btn").classList.add("hidden");
+  state.phase = "battle";
+  state.selectedUnit = null;
+  state.currentPlayer = "arg";
   updateUI();
   drawAll();
   document.getElementById("message").textContent = "¡A batallar! Tocá el tablero enemigo";
 }
 
-function drawAll(preview = null) {
+function drawAll(highlight = null) {
   if (!state.boards.arg) return;
-  drawBoard(ownCtx, state.boards.arg, true, state.map, state.terrain, preview);
+  let hl = highlight;
+  if (state.selectedUnit && !hl) {
+    // Preview current position of selected (if any)
+    hl = { cells: state.selectedUnit.previewCells || [] };
+  }
+  drawBoard(ownCtx, state.boards.arg, true, state.map, state.terrain, hl);
   drawBoard(enemyCtx, state.boards.inv, false, state.map, state.terrain);
 }
 
@@ -311,35 +349,91 @@ function getCellFromEvent(e, canvas) {
   const rect = canvas.getBoundingClientRect();
   const clientX = e.clientX || (e.changedTouches && e.changedTouches[0].clientX);
   const clientY = e.clientY || (e.changedTouches && e.changedTouches[0].clientY);
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  const x = Math.floor((clientX - rect.left) * scaleX / (canvas.width / GRID));
-  const y = Math.floor((clientY - rect.top) * scaleY / (canvas.height / GRID));
+  const x = Math.floor((clientX - rect.left) / (rect.width / GRID));
+  const y = Math.floor((clientY - rect.top) / (rect.height / GRID));
   return { x, y };
 }
 
 function handleOwnBoard(e) {
   if (state.phase !== "place") return;
   const { x, y } = getCellFromEvent(e, ownCanvas);
-  const units = getUnits();
-  const unit = units[state.placing.index];
-  if (!unit) return;
-  if (canPlace(state.boards.arg, x, y, unit.size, state.placing.horizontal)) {
-    placeUnit(state.boards.arg, x, y, unit.size, state.placing.horizontal, state.placing.index);
-    state.placing.index++;
+  if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
+
+  if (!state.selectedUnit) {
+    // Pick up unit
+    const unitId = state.boards.arg[y][x].unit;
+    if (unitId === null) return;
+    const cells = getUnitCells(state.boards.arg, unitId);
+    const horizontal = isHorizontal(cells);
+    const units = getUnits();
+    state.selectedUnit = {
+      id: unitId,
+      size: units[unitId].size,
+      horizontal,
+      previewCells: cells
+    };
+    removeUnit(state.boards.arg, unitId);
     updatePlacementMessage();
-    drawAll();
+    drawAll({ cells });
   } else {
-    document.getElementById("message").textContent = "No entra ahí. Rotá o probá otro lugar.";
+    // Place selected unit
+    const su = state.selectedUnit;
+    if (canPlace(state.boards.arg, x, y, su.size, su.horizontal, su.id)) {
+      placeUnit(state.boards.arg, x, y, su.size, su.horizontal, su.id);
+      state.selectedUnit = null;
+      updatePlacementMessage();
+      drawAll();
+    } else {
+      document.getElementById("message").textContent = "No entra ahí. Rotá o probá otro lugar.";
+    }
   }
 }
 
-ownCanvas.addEventListener("click", e => {
-  if (state.phase === "place") handleOwnBoard(e);
+// Drag support
+let dragging = false;
+ownCanvas.addEventListener("mousedown", e => { dragging = true; handleOwnBoard(e); });
+ownCanvas.addEventListener("mousemove", e => {
+  if (!dragging || state.phase !== "place" || !state.selectedUnit) return;
+  const { x, y } = getCellFromEvent(e, ownCanvas);
+  if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
+  const su = state.selectedUnit;
+  const cells = [];
+  for (let i = 0; i < su.size; i++) {
+    const cx = su.horizontal ? x + i : x;
+    const cy = su.horizontal ? y : y + i;
+    cells.push({ x: cx, y: cy });
+  }
+  su.previewCells = cells;
+  drawAll({ cells });
+});
+ownCanvas.addEventListener("mouseup", e => {
+  if (dragging && state.selectedUnit) handleOwnBoard(e);
+  dragging = false;
+});
+ownCanvas.addEventListener("touchstart", e => {
+  e.preventDefault();
+  dragging = true;
+  handleOwnBoard(e);
+});
+ownCanvas.addEventListener("touchmove", e => {
+  e.preventDefault();
+  if (!dragging || !state.selectedUnit) return;
+  const { x, y } = getCellFromEvent(e, ownCanvas);
+  if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
+  const su = state.selectedUnit;
+  const cells = [];
+  for (let i = 0; i < su.size; i++) {
+    const cx = su.horizontal ? x + i : x;
+    const cy = su.horizontal ? y : y + i;
+    cells.push({ x: cx, y: cy });
+  }
+  su.previewCells = cells;
+  drawAll({ cells });
 });
 ownCanvas.addEventListener("touchend", e => {
   e.preventDefault();
-  if (state.phase === "place") handleOwnBoard(e);
+  if (dragging && state.selectedUnit) handleOwnBoard(e);
+  dragging = false;
 });
 
 function handleShot(x, y) {
@@ -374,7 +468,8 @@ function aiTurn() {
   if (state.mode !== "pvc") return;
   const shot = aiShoot(state.boards.arg);
   if (!shot) return;
-  const result = shoot(state.boards.arg, shot.x, shot.y);
+  const [x, y] = shot;
+  const result = shoot(state.boards.arg, x, y);
   document.getElementById("message").textContent = result === "hit" ? "¡Te dieron!" : "El invasor falló";
   if (checkWin(state.boards.arg)) {
     alert("¡El invasor gana!");
@@ -450,7 +545,6 @@ if (params.has("room")) {
       setupConnection();
       beginPlacement();
     });
-    state.conn.on("error", () => alert("No se pudo conectar al host"));
   });
 }
 
