@@ -6,7 +6,7 @@ Tres mapas: Nahuel Huapi, Iguazú y Los Glaciares. El terreno puede ser agua, ti
 
 ## Cómo se juega
 
-1. La flota aparece al azar en una grilla de **10×20**. Hay **10 segundos** para levantarla (toque), arrastrarla o soltarla en otra celda, y rotarla.
+1. La flota aparece al azar en una grilla de **10×20** sobre el mapa real del parque. Hay **60 segundos** para moverla. **Estoy listo** cierra antes. En PvP empieza cuando los dos están listos, o cuando el reloj llega a 0.
 2. Al atacar se ve solo el territorio enemigo. Al colocar tropas o al recibir un ataque, solo el propio.
 3. **Radar** mira un área de 3×3 y no gasta el turno. **Bomba** estalla en cruz. **Camuflaje** anula el próximo ataque, sin marcar celdas.
 4. El parque revela una celda enemiga al empezar. Contra la máquina, el invasor persigue los impactos.

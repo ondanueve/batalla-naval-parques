@@ -249,9 +249,16 @@
     return cells[Math.floor(rng() * cells.length)];
   }
 
+  function battleMayStart(mode, localReady, remoteReady, secondsLeft, forced) {
+    if (secondsLeft <= 0 || forced) return true;
+    if (mode === "pvp") return !!(localReady && remoteReady);
+    return !!localReady;
+  }
+
   return {
     W, H, NATIONS, MAPS, FLEETS, COLORS,
     key, cellsOf, inBounds, canPlace, placeRandom, fleetHp,
-    shipAt, shipStatus, resolveShots, cross, area, aiShot, scout, mulberry32
+    shipAt, shipStatus, resolveShots, cross, area, aiShot, scout, mulberry32,
+    battleMayStart
   };
 });

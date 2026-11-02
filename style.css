@@ -125,22 +125,9 @@ body[data-map="glaciares"] .hero-art {
   flex: none;
   border: 2px solid rgba(255, 255, 255, 0.4);
 }
-.banner.nahuel {
-  background:
-    linear-gradient(180deg, transparent 55%, #1d4ed8 55%),
-    linear-gradient(135deg, transparent 40%, #f8fafc 40% 62%, transparent 62%),
-    linear-gradient(#38bdf8, #0369a1);
-}
-.banner.iguazu {
-  background:
-    linear-gradient(90deg, transparent 42%, #f8fafc 42% 58%, transparent 58%),
-    linear-gradient(#4ade80, #14532d);
-}
-.banner.glaciares {
-  background:
-    linear-gradient(180deg, transparent 40%, #0369a1 40%),
-    linear-gradient(160deg, #f8fafc, #94a3b8);
-}
+.banner.nahuel { background: #123 url("maps/nahuel.jpg") center 35% / cover; }
+.banner.iguazu { background: #123 url("maps/iguazu.jpg") center 62% / cover; }
+.banner.glaciares { background: #123 url("maps/glaciares.jpg") center 72% / cover; }
 .seg, .nation {
   padding: 10px 8px;
   font-size: 0.95rem;
@@ -263,6 +250,10 @@ body[data-map="glaciares"] .hero-art {
 }
 #board-label {
   flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 800;
   font-size: 0.78rem;
   letter-spacing: 0.08em;

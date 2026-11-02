@@ -7,7 +7,7 @@
   <title>Parques en Guerra</title>
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&family=Press+Start+2P&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="vendor/peerjs.min.js"></script>
 </head>
 <body data-map="nahuel" data-terrain="agua">
   <div id="app">
@@ -56,7 +56,7 @@
           <div class="row" id="nations"></div>
         </div>
         <ol class="steps">
-          <li>Grilla 10×20. La flota ya está puesta: tenés 10 segundos para moverla.</li>
+          <li>Grilla 10×20. La flota ya está puesta: tenés 60 segundos. Estoy listo la cierra; en PvP arranca cuando los dos marcan, o al llegar a 0.</li>
           <li>Al atacar ves solo al enemigo. Cuando te atacan, ves solo lo tuyo.</li>
           <li>Radar mira sin gastar el turno. Bomba estalla en cruz. Camuflaje anula un ataque.</li>
         </ol>
@@ -82,7 +82,7 @@
         <div id="board-label">Tu territorio</div>
         <div id="pips"></div>
         <canvas id="board" width="300" height="560"></canvas>
-        <div id="clock" class="hidden">10</div>
+        <div id="clock" class="hidden">60</div>
         <div id="incoming">TE ATACAN</div>
         <div id="end" class="hidden">
           <h2 id="end-title">Fin</h2>
@@ -98,7 +98,7 @@
         <button type="button" id="bomb" disabled>Bomba 1</button>
         <button type="button" id="camo" disabled>Camu 1</button>
         <button type="button" id="rotate" class="hidden">Rotar</button>
-        <button type="button" id="ready" class="hidden">Listo</button>
+        <button type="button" id="ready" class="hidden">Estoy listo</button>
       </div>
       <div id="dialogue">Elegí parque, terreno e invasor.</div>
       <button type="button" id="back">Menú</button>
@@ -108,6 +108,7 @@
   <div id="juke-panel" class="hidden" role="dialog" aria-label="Jukebox">
     <h2>JUKEBOX</h2>
     <p id="juke-title">Buscando señal…</p>
+    <p class="hint" id="juke-count">38 temas. Shuffle y repeat.</p>
     <div class="badges">
       <button type="button" id="juke-shuffle" aria-pressed="true">Shuffle ON</button>
       <button type="button" id="juke-repeat" aria-pressed="true">Repeat ON</button>

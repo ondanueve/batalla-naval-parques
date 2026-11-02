@@ -62,7 +62,7 @@
   let moved = false;
   let gestureHeld = false;
   let preview = null;
-  let clockLeft = 10;
+  let clockLeft = 60;
   let clockId = 0;
   let busy = false;
   const inbox = [];
@@ -71,6 +71,15 @@
   let remoteLeft = 17;
   let hudDirty = true;
   let trauma = 0;
+  let sealed = false;
+  let published = false;
+  let remoteForced = false;
+  let battleStarted = false;
+  let gotHello = false;
+  let helloTimer = 0;
+  let hereTimer = 0;
+  let hostTries = 0;
+  const mapImgs = {};
 
   function say(text) {
     ui.dialogue.textContent = text;
@@ -131,6 +140,10 @@
   }
 
   function destroyNet() {
+    clearInterval(helloTimer);
+    clearInterval(hereTimer);
+    helloTimer = 0;
+    hereTimer = 0;
     try { if (conn) conn.close(); } catch (e) {}
     try { if (peer) peer.destroy(); } catch (e) {}
     conn = null;
@@ -223,7 +236,7 @@
   function viewKind() {
     if (viewOverride) return viewOverride;
     if (!match) return "local";
-    if (match.phase === "place" || match.phase === "defend" || match.phase === "lobby") return "local";
+    if (match.phase === "place" || match.phase === "sealed" || match.phase === "defend" || match.phase === "lobby") return "local";
     return "remote";
   }
 
@@ -279,15 +292,19 @@
     document.getElementById("tag-arg").classList.toggle("hidden", match.role !== "arg");
     document.getElementById("tag-inv").classList.toggle("hidden", match.role !== "inv");
     const localView = viewKind() === "local";
-    let label = localView ? "Tu territorio" : "Territorio enemigo";
+    let label = (localView ? "Tu territorio" : "Territorio enemigo") + " · " + (C.MAPS[opts.map] ? C.MAPS[opts.map].name : "");
     if (match.shield && localView) label += " · camuflaje";
     if (match.phase === "lobby") label = "Esperando al invasor";
+    if (match.phase === "sealed") label = "Flota cerrada · " + (C.MAPS[opts.map] ? C.MAPS[opts.map].name : "");
     ui.label.textContent = label;
     paintPips(localView);
-    const placing = match.phase === "place";
+    const placing = match.phase === "place" && !sealed;
+    const waitingReady = match.phase === "sealed";
     const combat = match.phase === "attack" || match.phase === "defend" || match.phase === "resolving" || match.phase === "end";
     ui.rotate.classList.toggle("hidden", !placing);
-    ui.ready.classList.toggle("hidden", !placing);
+    ui.ready.classList.toggle("hidden", !(placing || waitingReady));
+    ui.ready.disabled = waitingReady;
+    ui.ready.textContent = waitingReady ? "Esperando" : "Estoy listo";
     ui.radar.classList.toggle("hidden", !combat);
     ui.bomb.classList.toggle("hidden", !combat);
     ui.camo.classList.toggle("hidden", !combat);
@@ -300,7 +317,7 @@
     ui.camo.textContent = match.shield ? "Camu ON" : "Camu " + match.powers.camo;
     ui.radar.setAttribute("aria-pressed", armed === "radar" ? "true" : "false");
     ui.bomb.setAttribute("aria-pressed", armed === "bomb" ? "true" : "false");
-    ui.rotate.disabled = !hand;
+    ui.rotate.disabled = sealed || !hand;
   }
 
   function roundRect(x, y, w, h, r) {
@@ -324,72 +341,74 @@
     return false;
   }
 
+  function asset(path) {
+    const nodes = document.querySelectorAll("script[src*='game.js']");
+    const src = nodes.length ? nodes[nodes.length - 1].getAttribute("src") || "game.js" : "game.js";
+    return src.replace(/game\.js(\?.*)?$/, path);
+  }
+
+  function parkImage() {
+    const id = opts.map || "nahuel";
+    if (!mapImgs[id]) {
+      const img = new Image();
+      img.src = asset("maps/" + id + ".jpg");
+      mapImgs[id] = img;
+    }
+    return mapImgs[id];
+  }
+
   function draw(time) {
     const g = gridGeom();
     const theme = THEME[opts.map] || THEME.nahuel;
     const w = ui.canvas.width;
     const h = ui.canvas.height;
     ctx.clearRect(0, 0, w, h);
-    const bg = ctx.createLinearGradient(0, 0, 0, h);
-    bg.addColorStop(0, theme.deep);
-    bg.addColorStop(1, theme.sea);
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, w, h);
-
     const shake = trauma * trauma * 7 * g.dpr;
     const ox = shake ? Math.sin(time / 17) * shake : 0;
     const oy = shake ? Math.cos(time / 23) * shake * 0.45 : 0;
     ctx.save();
     ctx.translate(ox, oy);
 
+    const gw = g.cellW * C.W;
+    const gh = g.cellH * C.H;
+    const img = parkImage();
+    if (img && img.complete && img.naturalWidth) {
+      ctx.drawImage(img, g.padL, g.padT, gw, gh);
+      ctx.fillStyle = "rgba(8,12,20,.16)";
+      ctx.fillRect(g.padL, g.padT, gw, gh);
+    } else {
+      const bg = ctx.createLinearGradient(0, 0, 0, h);
+      bg.addColorStop(0, theme.deep);
+      bg.addColorStop(1, theme.sea);
+      ctx.fillStyle = bg;
+      ctx.fillRect(g.padL, g.padT, gw, gh);
+    }
+
     for (let y = 0; y < C.H; y++) {
       for (let x = 0; x < C.W; x++) {
         const p = cellPx(g, x, y);
-        const land = isLand(x, y);
-        ctx.fillStyle = land ? theme.land : theme.sea;
-        ctx.fillRect(p.x, p.y, g.cellW + 0.6, g.cellH + 0.6);
-        if (!land) {
-          ctx.strokeStyle = theme.foam;
-          ctx.globalAlpha = 0.55;
-          ctx.lineWidth = Math.max(1, g.dpr);
-          ctx.beginPath();
-          const yy = p.y + g.cellH * (0.42 + 0.08 * Math.sin(time / 480 + x * 0.7 + y * 0.2));
-          ctx.moveTo(p.x + g.cellW * 0.15, yy);
-          ctx.quadraticCurveTo(p.x + g.cellW * 0.5, yy - g.cellH * 0.12, p.x + g.cellW * 0.85, yy);
-          ctx.stroke();
-          ctx.globalAlpha = 1;
-        } else if (opts.map === "glaciares") {
-          ctx.strokeStyle = "rgba(255,255,255,.55)";
-          ctx.beginPath();
-          ctx.moveTo(p.x + 2, p.y + g.cellH * 0.3);
-          ctx.lineTo(p.x + g.cellW - 2, p.y + g.cellH * 0.7);
-          ctx.stroke();
-        } else if ((x * 3 + y * 5) % 7 === 0) {
-          ctx.fillStyle = theme.spec;
-          ctx.beginPath();
-          ctx.moveTo(p.x + g.cellW * 0.5, p.y + g.cellH * 0.25);
-          ctx.lineTo(p.x + g.cellW * 0.68, p.y + g.cellH * 0.72);
-          ctx.lineTo(p.x + g.cellW * 0.32, p.y + g.cellH * 0.72);
-          ctx.fill();
-        }
-        ctx.strokeStyle = "rgba(2,6,23,.45)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(255,255,255,.38)";
+        ctx.lineWidth = Math.max(1, g.dpr * 0.6);
         ctx.strokeRect(p.x, p.y, g.cellW, g.cellH);
       }
     }
 
-    ctx.fillStyle = "rgba(248,250,252,.92)";
-    ctx.font = "700 " + Math.max(9, Math.floor(g.padT * 0.72)) + "px Nunito, sans-serif";
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,.85)";
+    ctx.shadowBlur = 4 * g.dpr;
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = "800 " + Math.max(9, Math.floor(g.padT * 0.72)) + "px Nunito, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (let x = 0; x < C.W; x++) {
       ctx.fillText(String.fromCharCode(65 + x), g.padL + (x + 0.5) * g.cellW, g.padT * 0.48);
     }
     ctx.textAlign = "right";
-    ctx.font = "700 " + Math.max(8, Math.floor(Math.min(g.cellH, g.padL) * 0.42)) + "px Nunito, sans-serif";
+    ctx.font = "800 " + Math.max(8, Math.floor(Math.min(g.cellH, g.padL) * 0.42)) + "px Nunito, sans-serif";
     for (let y = 0; y < C.H; y++) {
       ctx.fillText(String(y + 1), g.padL - 3 * g.dpr, g.padT + (y + 0.5) * g.cellH);
     }
+    ctx.restore();
 
     if (match) drawPieces(g, time);
     drawFx(g);
@@ -687,6 +706,10 @@
     preview = null;
     localReady = false;
     remoteReady = opts.mode !== "pvp";
+    sealed = false;
+    published = false;
+    remoteForced = false;
+    battleStarted = false;
     hudDirty = true;
     const nation = C.NATIONS[opts.nation];
     document.getElementById("inv-name").textContent = nation.flag + " " + nation.name.toUpperCase();
@@ -694,24 +717,38 @@
 
   function beginPlace() {
     match.phase = "place";
+    sealed = false;
+    battleStarted = false;
     hand = null;
     hudDirty = true;
     ui.linkbox.classList.add("hidden");
-    say("Flota al azar. Tocá para levantar, arrastrá o tocá otra celda para soltar. Rotar gira. Listo cierra ya.");
+    ui.ready.disabled = false;
+    ui.ready.textContent = "Estoy listo";
+    say(opts.mode === "pvp"
+      ? "60 segundos. Estoy listo cierra tu flota. Empieza cuando los dos están listos, o al llegar a 0."
+      : "60 segundos para mover la flota. Estoy listo empieza ya.");
     startClock();
     requestAnimationFrame(fit);
   }
 
   function startClock() {
     stopClock();
-    clockLeft = 10;
-    ui.clock.textContent = "10";
+    clockLeft = 60;
+    ui.clock.textContent = "60";
     ui.clock.classList.remove("hidden", "urgent");
     clockId = setInterval(() => {
       clockLeft--;
-      ui.clock.textContent = String(Math.max(0, clockLeft));
-      ui.clock.classList.toggle("urgent", clockLeft <= 3);
-      if (clockLeft <= 0) finishPlace();
+      if (clockLeft <= 0) {
+        clockLeft = 0;
+        ui.clock.textContent = "0";
+        ui.clock.classList.add("urgent");
+        clearInterval(clockId);
+        clockId = 0;
+        onClockDone();
+        return;
+      }
+      ui.clock.textContent = String(clockLeft);
+      ui.clock.classList.toggle("urgent", clockLeft <= 10);
     }, 1000);
   }
   function stopClock() {
@@ -721,36 +758,80 @@
     ui.clock.classList.remove("urgent");
   }
 
-  function finishPlace() {
-    if (!match || match.phase !== "place") return;
-    match.phase = "wait";
+  function sealFleet() {
+    if (sealed) return;
+    settleHand();
+    sealed = true;
+    localReady = true;
+    if (match && (match.phase === "place" || match.phase === "lobby")) match.phase = "sealed";
+    hudDirty = true;
+  }
+
+  function publishReady(force) {
+    if (opts.mode !== "pvp") return;
+    if (!published) {
+      published = true;
+      const sc = C.scout(match.local, Math.random);
+      send({ t: force ? "go" : "ready", scout: { x: sc.x, y: sc.y }, force: !!force });
+      return;
+    }
+    if (force) send({ t: "go", force: true });
+  }
+
+  function maybeStart() {
+    if (!match || battleStarted || opts.mode !== "pvp") return;
+    if (!C.battleMayStart("pvp", localReady, remoteReady, clockLeft, remoteForced)) return;
+    if (!sealed) sealFleet();
+    publishReady(clockLeft <= 0 || remoteForced);
+    beginBattle();
+  }
+
+  function beginBattle() {
+    if (!match || battleStarted) return;
+    battleStarted = true;
     settleHand();
     stopClock();
     hudDirty = true;
-    if (opts.mode === "pvc") {
+    if (opts.mode !== "pvp") {
       const sc = C.scout(match.remote, Math.random);
       match.intelShip.add(C.key(sc.x, sc.y));
       match.phase = "attack";
-      hudDirty = true;
       say(C.MAPS[opts.map].scout + " Tu turno: tocá una celda enemiga.");
       requestAnimationFrame(fit);
       return;
     }
-    const sc = C.scout(match.local, Math.random);
-    send({ t: "ready", scout: { x: sc.x, y: sc.y } });
-    localReady = true;
-    say("Flota cerrada. Esperando al rival…");
-    maybeStartPvp();
-  }
-
-  function maybeStartPvp() {
-    if (!localReady || !remoteReady || !match) return;
     match.phase = match.role === "arg" ? "attack" : "defend";
-    hudDirty = true;
     say(match.role === "arg"
       ? C.MAPS[opts.map].scout + " Empezás vos. Tocá el territorio enemigo."
       : "Argentina dispara primero. Si te pegan, lo vas a ver en tu parque.");
     requestAnimationFrame(fit);
+  }
+
+  function markReady() {
+    if (!match || battleStarted || sealed) return;
+    if (match.phase !== "place") return;
+    sealFleet();
+    if (opts.mode !== "pvp") {
+      beginBattle();
+      return;
+    }
+    publishReady(false);
+    say("Listo. Empieza si el rival también marca, o cuando el reloj llegue a 0.");
+    maybeStart();
+  }
+
+  function onClockDone() {
+    if (!match || battleStarted) return;
+    if (match.phase !== "place" && match.phase !== "sealed") return;
+    sealFleet();
+    if (opts.mode !== "pvp") {
+      beginBattle();
+      return;
+    }
+    remoteForced = true;
+    publishReady(true);
+    say("Tiempo. Empieza la batalla.");
+    maybeStart();
   }
 
   function cancelHand() {
@@ -807,13 +888,14 @@
     hand = null;
     preview = null;
     hudDirty = true;
-    say("Reacomodada. Quedan " + Math.max(0, clockLeft) + "s, o tocá Listo.");
+    say("Reacomodada. Quedan " + Math.max(0, clockLeft) + "s, o tocá Estoy listo.");
   }
 
   function onPointerDown(e) {
     if (!match) return;
     const cell = cellFromEvent(e);
     if (match.phase === "place") {
+      if (sealed) return;
       if (!cell) return;
       e.preventDefault();
       if (hand) {
@@ -833,8 +915,8 @@
       moved = false;
       return;
     }
-    if (match.phase === "defend" || match.phase === "resolving" || match.phase === "wait") {
-      say(match.phase === "wait" ? "Esperá a que cierre la otra flota." : "Ahora no: están disparando sobre tu parque.");
+    if (match.phase === "defend" || match.phase === "resolving" || match.phase === "wait" || match.phase === "sealed") {
+      say(match.phase === "sealed" ? "Flota cerrada. Esperando para empezar." : match.phase === "wait" ? "Esperá a que cierre la otra flota." : "Ahora no: están disparando sobre tu parque.");
       return;
     }
     if (match.phase !== "attack" || busy) return;
@@ -1006,7 +1088,16 @@
 
   function onData(msg) {
     if (!msg || !msg.t) return;
+    if (msg.t === "here") {
+      sendHello();
+      if (match && match.phase === "lobby") beginPlace();
+      return;
+    }
     if (msg.t === "hello") {
+      if (gotHello) return;
+      gotHello = true;
+      clearInterval(hereTimer);
+      hereTimer = 0;
       if (C.MAPS[msg.map]) opts.map = msg.map;
       if (C.FLEETS[msg.terrain]) opts.terrain = msg.terrain;
       if (C.NATIONS[msg.nation]) opts.nation = msg.nation;
@@ -1016,12 +1107,20 @@
       beginPlace();
       return;
     }
-    if (msg.t === "ready") {
+    if (msg.t === "ready" || msg.t === "go") {
       if (match && msg.scout && C.inBounds(msg.scout.x, msg.scout.y)) {
         match.intelShip.add(C.key(msg.scout.x, msg.scout.y));
       }
       remoteReady = true;
-      maybeStartPvp();
+      if (msg.t === "go" || msg.force) remoteForced = true;
+      if (remoteForced && match && !battleStarted && (match.phase === "place" || match.phase === "sealed")) {
+        sealFleet();
+        publishReady(true);
+      } else if (match && !battleStarted && !localReady && !remoteForced) {
+        say("El rival ya marcó Estoy listo. Marcá vos, o el juego arranca solo al llegar a 0.");
+      }
+      maybeStart();
+      hudDirty = true;
       return;
     }
     if (msg.t === "ping" && match) {
@@ -1057,49 +1156,138 @@
     c.on("error", () => say("Problema de red con el rival."));
   }
 
+  const PEER_CFG = {
+    secure: true,
+    host: "0.peerjs.com",
+    port: 443,
+    path: "/",
+    serialization: "json",
+    config: {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun.cloudflare.com:3478" }
+      ]
+    }
+  };
+
+  function whenOpen(c, fn) {
+    if (!c) return;
+    let done = false;
+    const run = () => {
+      if (done) return;
+      done = true;
+      fn();
+    };
+    if (c.open) run();
+    c.on("open", run);
+  }
+
+  function sendHello() {
+    send({ t: "hello", map: opts.map, terrain: opts.terrain, nation: opts.nation });
+  }
+
+  function noteMenu(text) {
+    const note = document.querySelector(".lede");
+    if (note) note.textContent = text;
+    say(text);
+  }
+
+  function inviteUrl(id) {
+    const path = location.pathname.endsWith("/") ? location.pathname : location.pathname.replace(/[^/]*$/, "");
+    return location.origin + path + "?sala=" + encodeURIComponent(id);
+  }
+
   function hostGame() {
     const id = "parques-" + Math.random().toString(36).slice(2, 8);
-    peer = new Peer(id);
-    peer.on("open", () => {
-      const url = location.origin + location.pathname + "?sala=" + encodeURIComponent(peer.id);
-      ui.link.value = url;
+    peer = new Peer(id, PEER_CFG);
+    peer.on("open", (pid) => {
+      ui.link.value = inviteUrl(pid);
       ui.linkbox.classList.remove("hidden");
-      say("Sala lista. Copiá el enlace: cuando el invasor entre, acomodás la flota (10s).");
+      say("Sala lista. Copiá el enlace. Al entrar el invasor arrancan los 60 segundos.");
     });
     peer.on("connection", (c) => {
       bindConn(c);
-      c.on("open", () => {
-        send({ t: "hello", map: opts.map, terrain: opts.terrain, nation: opts.nation });
-        if (match && match.phase === "lobby") beginPlace();
+      whenOpen(c, () => {
+        sendHello();
+        clearInterval(helloTimer);
+        helloTimer = setInterval(() => {
+          if (!match || (match.phase !== "lobby" && gotHello)) {
+            clearInterval(helloTimer);
+            return;
+          }
+          sendHello();
+        }, 1000);
       });
     });
+    peer.on("disconnected", () => {
+      say("Se cayó la sala. Reconectando…");
+      try { if (peer && !peer.destroyed) peer.reconnect(); } catch (e) {}
+    });
     peer.on("error", (err) => {
-      const typ = err && err.type;
-      if (typ === "unavailable-id") {
-        say("Esa sala estaba ocupada. Reintentando…");
+      const typ = (err && err.type) || "red";
+      if (typ === "unavailable-id" && hostTries < 3) {
+        hostTries++;
         try { peer.destroy(); } catch (e) {}
+        peer = null;
         hostGame();
         return;
       }
-      say("No se pudo abrir la sala. Volvé al menú y probá otra vez.");
+      if (typ === "disconnected" || typ === "network") return;
+      say("No se pudo abrir la sala (" + typ + "). Volvé al menú y probá otra vez.");
     });
   }
 
-  function joinGame(id) {
+  function joinGame(id, attempt) {
     if (!window.Peer) {
-      say("No se pudo cargar el modo en línea.");
+      noteMenu("No se pudo cargar el modo en línea.");
       return;
     }
+    const n = attempt || 1;
+    gotHello = false;
     showBattle();
-    say("Conectando con Argentina…");
-    peer = new Peer();
+    say(n === 1 ? "Conectando con Argentina…" : "Reintentando la sala… (" + n + ")");
+    peer = new Peer(PEER_CFG);
     peer.on("open", () => {
-      const c = peer.connect(id, { reliable: true });
+      const c = peer.connect(id, { reliable: true, serialization: "json" });
+      if (!c) {
+        say("No se pudo armar el enlace.");
+        return;
+      }
       bindConn(c);
-      c.on("open", () => say("En línea. Esperando el parque…"));
+      whenOpen(c, () => {
+        const ping = () => {
+          if (gotHello) {
+            clearInterval(hereTimer);
+            hereTimer = 0;
+            return;
+          }
+          send({ t: "here" });
+        };
+        ping();
+        clearInterval(hereTimer);
+        hereTimer = setInterval(ping, 800);
+      });
+      setTimeout(() => {
+        if (!gotHello && match == null && n < 4) {
+          try { peer.destroy(); } catch (e) {}
+          peer = null;
+          joinGame(id, n + 1);
+        } else if (!gotHello && n >= 4) {
+          noteMenu("No aparece la sala. Pedile a Argentina que la deje abierta y volvé a abrir el enlace.");
+          showMenu();
+        }
+      }, 7000);
     });
-    peer.on("error", () => {
-      say("No se pudo entrar a la sala.");
+    peer.on("error", (err) => {
+      const typ = (err && err.type) || "red";
+      if ((typ === "peer-unavailable" || typ === "network" || typ === "server-error" || typ === "socket-error") && n < 4) {
+        try { peer.destroy(); } catch (e) {}
+        peer = null;
+        setTimeout(() => joinGame(id, n + 1), 600);
+        return;
+      }
+      noteMenu("No se pudo entrar (" + typ + ").");
       showMenu();
     });
   }
@@ -1166,14 +1354,24 @@
     const fab = document.getElementById("juke-fab");
     const vol = document.getElementById("juke-vol");
     if (!panel || !fab) return;
-    fab.addEventListener("click", () => {
+    fab.addEventListener("click", (ev) => {
+      ev.stopPropagation();
       panel.classList.toggle("hidden");
-      const j = juke();
-      if (j) j.start();
     });
-    document.getElementById("juke-close").addEventListener("click", () => panel.classList.add("hidden"));
-    document.getElementById("juke-play").addEventListener("click", () => { const j = juke(); if (j) j.start(); });
-    document.getElementById("juke-stop").addEventListener("click", () => { const j = juke(); if (j) j.stop(); });
+    document.getElementById("juke-close").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      panel.classList.add("hidden");
+    });
+    document.getElementById("juke-play").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const j = juke();
+      if (j) j.start(true);
+    });
+    document.getElementById("juke-stop").addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const j = juke();
+      if (j) j.stop();
+    });
     document.getElementById("juke-next").addEventListener("click", () => { const j = juke(); if (j) j.next(); });
     vol.addEventListener("input", () => { const j = juke(); if (j) j.setVol(vol.value); });
     const sh = document.getElementById("juke-shuffle");
@@ -1227,7 +1425,7 @@
     say((hand.horizontal ? "Horizontal. " : "Vertical. ") + hand.ship.name + ". Soltala en una celda libre.");
     blip();
   });
-  ui.ready.addEventListener("click", () => finishPlace());
+  ui.ready.addEventListener("click", () => markReady());
   ui.radar.addEventListener("click", () => {
     if (!match || match.phase !== "attack" || match.powers.radar <= 0) return;
     armed = armed === "radar" ? null : "radar";
@@ -1270,7 +1468,12 @@
     lifted: !!hand,
     hp: hpOf(match.local, match.hitsOnLocal).left,
     powers: { ...match.powers },
-    shield: match.shield
+    shield: match.shield,
+    clock: clockLeft,
+    sealed,
+    localReady,
+    remoteReady,
+    battleStarted
   }) : { phase: "menu" };
 
   const sala = new URLSearchParams(location.search).get("sala");
