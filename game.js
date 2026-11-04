@@ -482,6 +482,8 @@
   }
 
   function flushHud() {
+    const fighting = !!match && (match.phase === "attack" || match.phase === "defend" || match.phase === "resolving");
+    if (document.body.classList.contains("in-battle") !== fighting) document.body.classList.toggle("in-battle", fighting);
     if (!hudDirty || !match) return;
     hudDirty = false;
     const localHp = hpOf(match.local, match.hitsOnLocal);
@@ -1704,6 +1706,7 @@
     let sunkAny = false;
     const j = juke();
     const stt = match && match.stats;
+    if (stt && !incoming) stt.shots++;
     if (pattern && pattern.cells && pattern.cells.length > 1) {
       const col = (pattern.level >= 2 || pattern.cells.length > 5) ? "#f87171" : "#fb923c";
       const mx = pattern.cells.reduce((a, c) => a + c.x, 0) / pattern.cells.length;
@@ -1717,8 +1720,8 @@
           if ((r.kind === "hit" && !r.again) || r.kind === "sunk") stt.taken++;
           if (r.kind === "sunk") stt.lost++;
         } else {
-          if (r.kind === "hit" || r.kind === "sunk") { stt.shots++; if (!r.again) stt.hits++; }
-          else if (r.kind === "miss") { stt.shots++; stt.misses++; }
+          if (r.kind === "hit" || r.kind === "sunk") { stt.cells = (stt.cells || 0) + 1; if (!r.again) stt.hits++; }
+          else if (r.kind === "miss") { stt.cells = (stt.cells || 0) + 1; stt.misses++; }
           if (r.kind === "sunk") stt.sunk++;
         }
       }
@@ -2437,7 +2440,7 @@
     const path = location.pathname.endsWith("/") ? location.pathname : location.pathname.replace(/[^/]*$/, "");
     return location.origin + path + "?parque=" + opts.map + "&terreno=" + opts.terrain + "&invasor=" + opts.nation;
   }
-  function accuracyOf(stt) { return stt.shots ? Math.round((stt.hits / stt.shots) * 100) : 0; }
+  function accuracyOf(stt) { return stt.cells ? Math.round((stt.hits / stt.cells) * 100) : 0; }
   function fmtTime(ms) {
     const sec = Math.max(0, Math.round(ms / 1000));
     return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
