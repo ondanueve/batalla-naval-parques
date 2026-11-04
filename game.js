@@ -115,7 +115,7 @@
   let tutoForce = false;
   const TUTO_COPY = {
     0: ["PREPARACIÓN", "Tu flota ya está puesta (podés arrastrarla). Tocá «Estoy listo» para empezar."],
-    1: ["PASO 1 DE 3 · DISPARAR", "La celda amarilla es una pista de exploración. Tocala y mirá si hay un barco enemigo."],
+    1: ["PASO 1 DE 3 · DISPARAR", "El enemigo está escondido. Tocá cualquier celda del mapa para disparar."],
     2: ["PASO 2 DE 3 · RADAR", "Tocá «Radar» y después el centro de un área: revela contactos 3×3 y no gasta el turno."],
     3: ["PASO 3 DE 3 · CAMUFLAJE", "Tocá «Camu»: el próximo ataque enemigo no te deja marca. Usalo cuando te tengan cerca."],
     4: ["¡LISTO!", "Ya sabés jugar. Hundí toda la flota enemiga antes de que hundan la tuya."]
@@ -301,22 +301,8 @@
 
   function fit() {
     const stage = ui.stage;
-    const chrome = (ui.label ? ui.label.offsetHeight : 16) + (ui.pips ? ui.pips.offsetHeight : 18) + 8;
-    const availW = Math.max(80, stage.clientWidth);
-    const availH = Math.max(80, stage.clientHeight - chrome);
-    let h = availH;
-    let w = h * (C.W / C.H);
-    if (w > availW) {
-      w = availW;
-      h = w * (C.H / C.W);
-    }
-    w = Math.max(40, Math.floor(w));
-    h = Math.max(40, Math.floor(h));
-    if (h > availH) {
-      h = Math.floor(availH);
-      w = Math.floor(h * (C.W / C.H));
-    }
-    if (w > availW) w = Math.floor(availW);
+    const w = Math.max(80, Math.floor(stage.clientWidth));
+    const h = Math.max(80, Math.floor(stage.clientHeight));
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const bw = Math.floor(w * dpr);
     const bh = Math.floor(h * dpr);
@@ -328,22 +314,29 @@
     }
   }
 
+  // La grilla ocupa toda la pantalla. Si la pantalla es casi tan angosta como 1:2 se estira a lo ancho
+  // (celdas apenas más altas); si es más ancha (escritorio) se centra a toda la altura y el parque se
+  // extiende de fondo.
+  function geomCss(cw, ch) {
+    const aspect = cw / Math.max(1, ch);
+    let gw;
+    if (aspect <= 0.62) gw = cw;
+    else gw = Math.min(cw, ch * (C.W / C.H) * 1.6);
+    return { ox: (cw - gw) / 2, oy: 0, cellW: gw / C.W, cellH: ch / C.H };
+  }
+
   function gridGeom() {
     const dpr = ui.canvas.width / Math.max(1, ui.canvas.clientWidth || ui.canvas.width);
-    const padL = PAD_L * dpr;
-    const padT = PAD_T * dpr;
-    const cellW = (ui.canvas.width - padL) / C.W;
-    const cellH = (ui.canvas.height - padT) / C.H;
-    return { dpr, padL, padT, cellW, cellH };
+    const k = geomCss(ui.canvas.width, ui.canvas.height);
+    return { dpr, padL: k.ox, padT: k.oy, cellW: k.cellW, cellH: k.cellH };
   }
 
   function cellFromEvent(e, loose) {
     const r = ui.canvas.getBoundingClientRect();
-    const cw = (r.width - PAD_L) / C.W;
-    const ch = (r.height - PAD_T) / C.H;
-    if (cw <= 0 || ch <= 0) return null;
-    let x = Math.floor((e.clientX - r.left - PAD_L) / cw);
-    let y = Math.floor((e.clientY - r.top - PAD_T) / ch);
+    const k = geomCss(r.width, r.height);
+    if (k.cellW <= 0 || k.cellH <= 0) return null;
+    let x = Math.floor((e.clientX - r.left - k.ox) / k.cellW);
+    let y = Math.floor((e.clientY - r.top - k.oy) / k.cellH);
     if (loose) {
       x = Math.max(-2, Math.min(C.W + 1, x));
       y = Math.max(-2, Math.min(C.H + 1, y));
@@ -517,6 +510,28 @@
     return cv;
   }
 
+  let bdCache = null;
+  function drawBackdrop(img, w, h) {
+    if (!bdCache || bdCache.img !== img || bdCache.w !== w || bdCache.h !== h) {
+      const cv = document.createElement("canvas");
+      cv.width = w;
+      cv.height = h;
+      const c2 = cv.getContext("2d");
+      c2.fillStyle = "#0b2a3f";
+      c2.fillRect(0, 0, w, h);
+      const sc = Math.max(w / img.naturalWidth, h / img.naturalHeight) * 1.15;
+      const dw = img.naturalWidth * sc;
+      const dh = img.naturalHeight * sc;
+      if ("filter" in c2) c2.filter = "blur(" + Math.round(10 * (w / 800 + 1)) + "px) saturate(1.35) brightness(1.2)";
+      c2.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+      c2.filter = "none";
+      c2.fillStyle = "rgba(4,10,24,.28)";
+      c2.fillRect(0, 0, w, h);
+      bdCache = { img, w, h, canvas: cv };
+    }
+    ctx.drawImage(bdCache.canvas, 0, 0);
+  }
+
   function drawTutoHint(g, time) {
     if (!tuto || tuto.step !== 1 || !match || match.phase !== "attack" || viewKind() !== "remote") return;
     match.intelShip.forEach((k) => {
@@ -555,6 +570,7 @@
     const gw = g.cellW * C.W;
     const gh = g.cellH * C.H;
     const img = parkImage();
+    if (img && img.complete && img.naturalWidth && (g.padL > 1 || g.padT > 1)) drawBackdrop(img, w, h);
     if (img && img.complete && img.naturalWidth) {
       ctx.drawImage(vividMap(img, gw, gh), g.padL, g.padT, gw, gh);
       if (!reduceMotion) {
@@ -620,23 +636,6 @@
     ctx.strokeStyle = "rgba(255,255,255,.55)";
     ctx.lineWidth = Math.max(1.5, g.dpr * 1.2);
     ctx.strokeRect(g.padL, g.padT, gw, gh);
-
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,.85)";
-    ctx.shadowBlur = 4 * g.dpr;
-    ctx.fillStyle = "#f8fafc";
-    ctx.font = "800 " + Math.max(9, Math.floor(g.padT * 0.72)) + "px Nunito, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    for (let x = 0; x < C.W; x++) {
-      ctx.fillText(String.fromCharCode(65 + x), g.padL + (x + 0.5) * g.cellW, g.padT * 0.48);
-    }
-    ctx.textAlign = "right";
-    ctx.font = "800 " + Math.max(8, Math.floor(Math.min(g.cellH, g.padL) * 0.42)) + "px Nunito, sans-serif";
-    for (let y = 0; y < C.H; y++) {
-      ctx.fillText(String(y + 1), g.padL - 3 * g.dpr, g.padT + (y + 0.5) * g.cellH);
-    }
-    ctx.restore();
 
     if (match) drawPieces(g, time);
     drawTutoHint(g, time);
@@ -1380,8 +1379,7 @@
     if (opts.mode !== "pvp") return;
     if (!published) {
       published = true;
-      const sc = C.scout(match.local, Math.random);
-      send({ t: force ? "go" : "ready", scout: { x: sc.x, y: sc.y }, force: !!force });
+      send({ t: force ? "go" : "ready", force: !!force });
       return;
     }
     if (force) send({ t: "go", force: true });
@@ -1403,17 +1401,15 @@
     stopClock();
     hudDirty = true;
     if (opts.mode !== "pvp") {
-      const sc = C.scout(match.remote, Math.random);
-      match.intelShip.add(C.key(sc.x, sc.y));
       match.phase = "attack";
       tutoEvent("ready");
-      say(C.MAPS[opts.map].scout + " Tu turno: tocá una celda enemiga.");
+      say("El enemigo está escondido. Tu turno: tocá una celda enemiga.");
       requestAnimationFrame(fit);
       return;
     }
     match.phase = match.role === "arg" ? "attack" : "defend";
     say(match.role === "arg"
-      ? C.MAPS[opts.map].scout + " Empezás vos. Tocá el territorio enemigo."
+      ? "Nadie sabe dónde está nadie. Empezás vos: tocá el territorio enemigo."
       : "Argentina dispara primero. Si te pegan, lo vas a ver en tu parque.");
     requestAnimationFrame(fit);
   }
@@ -1855,9 +1851,6 @@
       return;
     }
     if (msg.t === "ready" || msg.t === "go") {
-      if (match && msg.scout && C.inBounds(msg.scout.x, msg.scout.y)) {
-        match.intelShip.add(C.key(msg.scout.x, msg.scout.y));
-      }
       remoteReady = true;
       if (msg.t === "go" || msg.force) remoteForced = true;
       if (remoteForced && match && !battleStarted && (match.phase === "place" || match.phase === "sealed")) {
@@ -2233,6 +2226,17 @@
     const j = juke();
     if (j) j.sfx.shield();
     say("Camuflaje activo. El próximo ataque enemigo no deja marca.");
+  });
+
+  const hudBtn = document.getElementById("hud-toggle");
+  hudBtn.addEventListener("click", () => {
+    const off = document.body.classList.toggle("hud-off");
+    hudBtn.setAttribute("aria-pressed", off ? "false" : "true");
+    blip();
+  });
+  document.getElementById("log-toggle").addEventListener("click", () => {
+    document.body.classList.toggle("log-on");
+    blip();
   });
 
   ui.canvas.addEventListener("pointerdown", onPointerDown);

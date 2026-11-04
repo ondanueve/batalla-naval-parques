@@ -81,20 +81,7 @@
     </section>
 
     <section id="battle" class="screen hidden">
-      <header class="hud">
-        <div class="plate" id="plate-arg">
-          <div class="who"><b>ARGENTINA</b><span id="tag-arg" class="you-tag hidden">VOS</span></div>
-          <div class="hp-line"><em>HP</em><div class="bar" id="bar-arg"><i></i></div><strong id="hp-arg">17/17</strong></div>
-        </div>
-        <div class="plate" id="plate-inv">
-          <div class="who"><b id="inv-name">INVASOR</b><span id="tag-inv" class="you-tag hidden">VOS</span></div>
-          <div class="hp-line"><em>HP</em><div class="bar" id="bar-inv"><i></i></div><strong id="hp-inv">17/17</strong></div>
-        </div>
-        <button type="button" id="juke-fab" aria-label="Jukebox">♪</button>
-      </header>
       <div id="stage">
-        <div id="board-label">Tu territorio</div>
-        <div id="pips"></div>
         <canvas id="board" width="300" height="560"></canvas>
         <div id="clock" class="hidden">60</div>
         <div id="incoming">TE ATACAN</div>
@@ -118,25 +105,46 @@
           <p id="end-note" role="status"></p>
         </div>
       </div>
-      <div id="linkbox" class="hidden">
-        <input id="link" readonly aria-label="Enlace de invitación">
-        <button type="button" id="copy">Copiar</button>
+      <div id="hud-top" class="ov">
+        <header class="hud">
+          <div class="plate" id="plate-arg">
+            <div class="who"><b>ARGENTINA</b><span id="tag-arg" class="you-tag hidden">VOS</span></div>
+            <div class="hp-line"><em>HP</em><div class="bar" id="bar-arg"><i></i></div><strong id="hp-arg">17/17</strong></div>
+          </div>
+          <div class="plate" id="plate-inv">
+            <div class="who"><b id="inv-name">INVASOR</b><span id="tag-inv" class="you-tag hidden">VOS</span></div>
+            <div class="hp-line"><em>HP</em><div class="bar" id="bar-inv"><i></i></div><strong id="hp-inv">17/17</strong></div>
+          </div>
+        </header>
+        <div id="board-label">Tu territorio</div>
+        <div id="pips"></div>
       </div>
-      <div class="tools" id="tools" role="group" aria-label="Acciones del turno">
-        <button type="button" id="radar" disabled>Radar 2</button>
-        <button type="button" id="bomb" disabled>Bomba 1</button>
-        <button type="button" id="camo" disabled>Camu 1</button>
-        <button type="button" id="rotate" class="hidden">Rotar</button>
-        <button type="button" id="ready" class="hidden">Estoy listo</button>
+      <div id="dock-btns">
+        <button type="button" id="hud-toggle" aria-pressed="true" aria-label="Mostrar u ocultar paneles" title="Mostrar u ocultar paneles">◐</button>
+        <button type="button" id="log-toggle" class="ov" aria-label="Crónica" title="Crónica">≡</button>
+        <button type="button" id="juke-fab" class="ov" aria-label="Jukebox">♪</button>
       </div>
-      <div id="coach" class="hidden" role="status">
-        <div class="coach-top"><span id="coach-step"></span><button type="button" id="coach-skip">Saltar tutorial</button></div>
-        <p id="coach-text"></p>
-        <button type="button" id="coach-ok" class="hidden">Entendido</button>
+      <div id="hud-bottom" class="ov">
+        <div id="linkbox" class="hidden">
+          <input id="link" readonly aria-label="Enlace de invitación">
+          <button type="button" id="copy">Copiar</button>
+        </div>
+        <div id="coach" class="hidden" role="status">
+          <div class="coach-top"><span id="coach-step"></span><button type="button" id="coach-skip">Saltar tutorial</button></div>
+          <p id="coach-text"></p>
+          <button type="button" id="coach-ok" class="hidden">Entendido</button>
+        </div>
+        <div class="tools" id="tools" role="group" aria-label="Acciones del turno">
+          <button type="button" id="radar" disabled>Radar 2</button>
+          <button type="button" id="bomb" disabled>Bomba 1</button>
+          <button type="button" id="camo" disabled>Camu 1</button>
+          <button type="button" id="rotate" class="hidden">Rotar</button>
+          <button type="button" id="ready" class="hidden">Estoy listo</button>
+        </div>
+        <div id="dialogue">Elegí parque, terreno e invasor.</div>
+        <button type="button" id="back">Menú</button>
       </div>
-      <div id="dialogue">Elegí parque, terreno e invasor.</div>
-      <button type="button" id="back">Menú</button>
-      <aside id="log" aria-label="Crónica de la batalla"><h3>Crónica</h3><ol id="log-list"></ol></aside>
+      <aside id="log" class="ov" aria-label="Crónica de la batalla"><h3>Crónica</h3><ol id="log-list"></ol></aside>
     </section>
   </div>
   <div id="hurt"></div>
