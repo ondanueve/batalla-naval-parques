@@ -601,3 +601,42 @@ body[data-map="glaciares"] .hero-art {
   text-decoration: underline;
   padding: 4px 8px;
 }
+
+/* PANTALLA FINAL */
+#end { gap: 8px; overflow: auto; }
+#end-kicker {
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #334155;
+  color: #fff;
+}
+#end.win #end-kicker { background: #16a34a; color: #052e16; animation: coachIn 0.6s ease; }
+#end.lose #end-kicker { background: #b91c1c; }
+#end.win h2 { animation: introPop 0.7s cubic-bezier(.2,.9,.25,1) both; }
+.stats {
+  width: 100%;
+  max-width: 340px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.stats div {
+  background: rgba(15, 23, 42, 0.85);
+  border: 2px solid rgba(245, 197, 66, 0.55);
+  border-radius: 10px;
+  padding: 6px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stats b { font-family: "Press Start 2P", monospace; font-size: 0.78rem; color: #fde047; }
+.stats small { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #cbd5e1; }
+.end-actions { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 260px; }
+.end-actions .go { padding: 11px 10px; font-size: 0.68rem; }
+.go.gold { background: var(--gold); color: #3b2a00; }
+.go.ghostbtn { background: #1e293b; color: #e2e8f0; }
+.go:disabled { opacity: 0.5; }
+#end-note { margin: 0; min-height: 1.1em; font-size: 0.8rem; font-weight: 800; color: #bae6fd; max-width: 300px; }

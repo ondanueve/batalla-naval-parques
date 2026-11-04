@@ -100,8 +100,22 @@
         <div id="incoming">TE ATACAN</div>
         <div id="banner" aria-live="polite"><b></b><small></small></div>
         <div id="end" class="hidden">
+          <span id="end-kicker">FIN</span>
           <h2 id="end-title">Fin</h2>
-          <button type="button" class="go" id="again">Volver al menú</button>
+          <div class="stats" id="stats">
+            <div><b id="st-shots">0</b><small>Disparos</small></div>
+            <div><b id="st-acc">0%</b><small>Precisión</small></div>
+            <div><b id="st-sunk">0</b><small>Hundidos</small></div>
+            <div><b id="st-taken">0</b><small>Daño recibido</small></div>
+            <div><b id="st-turns">0</b><small>Turnos</small></div>
+            <div><b id="st-time">0:00</b><small>Duración</small></div>
+          </div>
+          <div class="end-actions">
+            <button type="button" class="go" id="rematch">Revancha</button>
+            <button type="button" class="go gold" id="share">Compartir</button>
+            <button type="button" class="go ghostbtn" id="again">Menú</button>
+          </div>
+          <p id="end-note" role="status"></p>
         </div>
       </div>
       <div id="linkbox" class="hidden">

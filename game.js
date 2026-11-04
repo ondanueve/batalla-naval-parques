@@ -110,6 +110,7 @@
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
   };
+  let rematch = { me: false, them: false };
   let tuto = null; // { step, pending } while the guided tutorial is on
   let tutoForce = false;
   const TUTO_COPY = {
@@ -200,6 +201,7 @@
       const b = document.createElement("button");
       b.type = "button";
       b.className = "nation" + (id === opts.nation ? " selected" : "");
+      b.dataset.nation = id;
       b.textContent = n.flag + " " + n.name;
       b.addEventListener("click", () => {
         opts.nation = id;
@@ -237,13 +239,7 @@
     peer = null;
   }
 
-  function showMenu() {
-    stopClock();
-    destroyNet();
-    match = null;
-    hand = null;
-    armed = null;
-    viewOverride = null;
+  function resetFx() {
     parts = [];
     rings = [];
     floats = [];
@@ -253,7 +249,19 @@
     hitstop = 0;
     slow = 0;
     flashScreen = 0;
+    trauma = 0;
     hideBanner();
+    ui.stage.classList.remove("under-fire", "shake");
+  }
+
+  function showMenu() {
+    stopClock();
+    destroyNet();
+    match = null;
+    hand = null;
+    armed = null;
+    viewOverride = null;
+    resetFx();
     tuto = null;
     tutoRender();
     ui.end.classList.add("hidden");
@@ -1226,8 +1234,20 @@
     if (incoming) ui.stage.classList.add("under-fire");
     let sunkAny = false;
     const j = juke();
+    const stt = match && match.stats;
+    if (stt && !incoming) stt.turns++;
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
+      if (stt) {
+        if (incoming) {
+          if (r.kind === "hit" || r.kind === "sunk") stt.taken++;
+          if (r.kind === "sunk") stt.lost++;
+        } else {
+          if (r.kind === "hit" || r.kind === "sunk") { stt.shots++; stt.hits++; }
+          else if (r.kind === "miss") { stt.shots++; stt.misses++; }
+          if (r.kind === "sunk") stt.sunk++;
+        }
+      }
       if (r.kind === "hit" || r.kind === "sunk") {
         fxHit(r.x, r.y, incoming);
         if (j) j.sfx.hit();
@@ -1274,8 +1294,10 @@
       intelShip: new Set(),
       intelEmpty: new Set(),
       powers: { radar: 2, bomb: 1, camo: 1 },
-      shield: false
+      shield: false,
+      stats: { shots: 0, hits: 0, misses: 0, sunk: 0, taken: 0, lost: 0, turns: 0, radar: 0, bomb: 0, camo: 0, t0: 0, t1: 0 }
     };
+    rematch = { me: false, them: false };
     remoteLeft = 17;
     hand = null;
     armed = null;
@@ -1365,6 +1387,7 @@
   function beginBattle() {
     if (!match || battleStarted) return;
     battleStarted = true;
+    match.stats.t0 = Date.now();
     settleHand();
     stopClock();
     hudDirty = true;
@@ -1555,6 +1578,7 @@
       return;
     }
     match.powers.radar--;
+    match.stats.radar++;
     armed = null;
     hudDirty = true;
     if (opts.mode === "pvc") {
@@ -1590,7 +1614,7 @@
       say("Esa zona ya está marcada.");
       return;
     }
-    if (bomb) match.powers.bomb--;
+    if (bomb) { match.powers.bomb--; match.stats.bomb++; }
     armed = null;
     tutoEvent("shot");
     match.phase = "resolving";
@@ -1681,6 +1705,100 @@
     say("Disparo resuelto. Si el rival acierta, lo ves en tu territorio.");
   }
 
+  function parkName() { return (C.MAPS[opts.map] || {}).name || "el parque"; }
+  function challengeUrl() {
+    const path = location.pathname.endsWith("/") ? location.pathname : location.pathname.replace(/[^/]*$/, "");
+    return location.origin + path + "?parque=" + opts.map + "&terreno=" + opts.terrain + "&invasor=" + opts.nation;
+  }
+  function accuracyOf(stt) { return stt.shots ? Math.round((stt.hits / stt.shots) * 100) : 0; }
+  function fmtTime(ms) {
+    const sec = Math.max(0, Math.round(ms / 1000));
+    return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+  }
+  function shareText(win) {
+    const stt = match.stats;
+    const acc = accuracyOf(stt);
+    const role = match.role;
+    if (win) return (role === "arg" ? "Defendí " : "Tomé ") + parkName() + " en " + stt.turns + " turnos con " + acc + "% de precisión en Parques en Guerra. ¿Podés vos?";
+    return "Caí en " + parkName() + " tras " + stt.turns + " turnos (" + acc + "% de precisión) en Parques en Guerra. ¿Me ganás la revancha?";
+  }
+  function renderEnd(win, argentinaHolds) {
+    const stt = match.stats;
+    const fleet = match.local.length;
+    const vals = {
+      "st-shots": stt.shots,
+      "st-acc": accuracyOf(stt) + "%",
+      "st-sunk": stt.sunk + "/" + (match.remote ? match.remote.length : fleet),
+      "st-taken": stt.taken + "/17",
+      "st-turns": stt.turns,
+      "st-time": fmtTime((stt.t1 || Date.now()) - (stt.t0 || Date.now()))
+    };
+    Object.keys(vals).forEach((id) => { document.getElementById(id).textContent = String(vals[id]); });
+    document.getElementById("end-kicker").textContent = win ? "VICTORIA" : "DERROTA";
+    ui.end.classList.toggle("win", !!win);
+    ui.end.classList.toggle("lose", !win);
+    const rv = document.getElementById("rematch");
+    rv.disabled = false;
+    rv.textContent = "Revancha";
+    document.getElementById("end-note").textContent = "";
+    window.__parquesEnd = { win: !!win, stats: Object.assign({}, stt), argentinaHolds: !!argentinaHolds };
+  }
+
+  function startRematch() {
+    const role = match ? match.role : "arg";
+    stopClock();
+    resetFx();
+    ui.end.classList.add("hidden");
+    freshMatch(role);
+    showBattle();
+    beginPlace();
+  }
+  function onRematchClick() {
+    if (!match || match.phase !== "end") return;
+    if (opts.mode !== "pvp") {
+      resetFx();
+      startGame();
+      return;
+    }
+    const note = document.getElementById("end-note");
+    if (!conn || !conn.open) {
+      note.textContent = "El rival ya no está conectado. Volvé al menú y armá otra sala.";
+      document.getElementById("rematch").disabled = true;
+      return;
+    }
+    rematch.me = true;
+    send({ t: "rematch" });
+    document.getElementById("rematch").disabled = true;
+    note.textContent = rematch.them ? "Arrancando la revancha…" : "Esperando que el rival acepte la revancha…";
+    if (match.role === "arg" && rematch.them) hostRematchGo();
+  }
+  function hostRematchGo() {
+    opts.crop = Math.floor(Math.random() * 5);
+    send({ t: "rematchgo", crop: opts.crop });
+    startRematch();
+  }
+  async function onShare() {
+    if (!match) return;
+    const win = ui.end.classList.contains("win");
+    const text = shareText(win);
+    const url = challengeUrl();
+    const note = document.getElementById("end-note");
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Parques en Guerra", text, url });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+    }
+    try {
+      await navigator.clipboard.writeText(text + " " + url);
+      note.textContent = "Enlace de desafío copiado. Pegalo donde quieras.";
+    } catch (e) {
+      note.textContent = url;
+    }
+  }
+
   function finish(win) {
     if (!match || match.phase === "end") return;
     match.phase = "end";
@@ -1691,6 +1809,8 @@
     // so the Argentine-flavored headline must be flipped for them.
     const argentinaHolds = match.role === "inv" ? !win : win;
     ui.endTitle.textContent = argentinaHolds ? "El parque sigue siendo argentino." : "El invasor tomó el territorio.";
+    match.stats.t1 = Date.now();
+    renderEnd(win, argentinaHolds);
     ui.end.classList.remove("hidden");
     say(win ? (match.role === "inv" ? "Tomaste el territorio. No queda nada de la defensa." : "No queda nada del invasor.") : "Perdiste la flota.");
     ui.stage.classList.remove("under-fire");
@@ -1759,6 +1879,21 @@
       hudDirty = true;
       return;
     }
+    if (msg.t === "rematch") {
+      rematch.them = true;
+      if (match && match.phase === "end") {
+        document.getElementById("end-note").textContent = rematch.me ? "Arrancando la revancha…" : "El rival pide revancha. Tocá Revancha para aceptar.";
+        if (match.role === "arg" && rematch.me) hostRematchGo();
+      }
+      return;
+    }
+    if (msg.t === "rematchgo") {
+      if (match && match.phase === "end" && rematch.me && match.role === "inv") {
+        if (typeof msg.crop === "number") opts.crop = ((msg.crop % 5) + 5) % 5;
+        startRematch();
+      }
+      return;
+    }
     if (msg.t === "fire") lock(() => handleFire(msg));
     if (msg.t === "resolved") lock(() => handleResolved(msg));
   }
@@ -1768,6 +1903,10 @@
     c.on("data", onData);
     c.on("close", () => {
       if (match && match.phase !== "end") say("Se cortó la conexión.");
+      if (match && match.phase === "end") {
+        document.getElementById("end-note").textContent = "El rival salió de la sala.";
+        document.getElementById("rematch").disabled = true;
+      }
     });
     c.on("error", () => say("Problema de red con el rival."));
   }
@@ -2035,6 +2174,8 @@
   document.getElementById("start").addEventListener("click", startGame);
   document.getElementById("back").addEventListener("click", showMenu);
   document.getElementById("again").addEventListener("click", showMenu);
+  document.getElementById("rematch").addEventListener("click", onRematchClick);
+  document.getElementById("share").addEventListener("click", onShare);
   document.getElementById("copy").addEventListener("click", async () => {
     const value = ui.link.value;
     try {
@@ -2073,6 +2214,7 @@
   ui.camo.addEventListener("click", () => {
     if (!match || match.phase !== "attack" || match.powers.camo <= 0 || match.shield) return;
     match.powers.camo--;
+    match.stats.camo++;
     match.shield = true;
     armed = null;
     hudDirty = true;
@@ -2099,6 +2241,21 @@
     tutoForce = true;
     startGame();
   });
+
+  function applyChallenge() {
+    const q = new URLSearchParams(location.search);
+    const pk = q.get("parque");
+    const tr = q.get("terreno");
+    const inv = q.get("invasor");
+    if (q.get("sala") || !(pk || tr || inv)) return;
+    const click = (sel) => { const el = document.querySelector(sel); if (el) el.click(); };
+    if (C.MAPS[pk]) click("#maps [data-map=" + pk + "]");
+    if (C.FLEETS[tr]) click("#terrains [data-terrain=" + tr + "]");
+    if (C.NATIONS[inv]) click("#nations [data-nation=" + inv + "]");
+    const lede = document.querySelector(".lede");
+    if (lede) lede.textContent = "Te desafiaron en " + parkName() + " (" + opts.terrain + "). ¿Aceptás?";
+  }
+  applyChallenge();
 
   function setupIntro() {
     const el = document.getElementById("intro");
@@ -2144,6 +2301,7 @@
     localReady,
     remoteReady,
     battleStarted,
+    stats: { ...match.stats },
     intel: Array.from(match.intelShip),
     tuto: tuto ? tuto.step : null
   }) : { phase: "menu" };
