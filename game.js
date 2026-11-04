@@ -183,8 +183,14 @@
 
   const logList = document.getElementById("log-list");
   let lastSay = "";
+  let sayT = 0;
   function say(text) {
     ui.dialogue.textContent = text;
+    if (document.body.classList.contains("in-battle") && text) {
+      document.body.classList.add("say-on");
+      clearTimeout(sayT);
+      sayT = setTimeout(() => document.body.classList.remove("say-on"), 3600);
+    }
     if (logList && text && text !== lastSay && !/^(Tu turno\.|El invasor apunta|El invasor piensa|Disparo en camino|Disparar da|Esperando|Bombardeo:)/.test(text)) {
       lastSay = text;
       const li = document.createElement("li");
@@ -422,6 +428,11 @@
     ui.warmeter.querySelector(".wm i").style.width = Math.min(100, Math.round((Math.min(round, 18) / 18) * 100)) + "%";
     const myTurn = match.phase === "attack";
     const side = match.side;
+    const pill = document.getElementById("hud-pill");
+    pill.className = "l" + lvl + (myTurn ? " mine" : "");
+    document.getElementById("pill-turn").textContent = myTurn ? "Tu turno" : match.phase === "defend" ? "Turno rival" : "Disparos…";
+    document.getElementById("pill-war").textContent = C.WAR_NAMES[lvl];
+    document.getElementById("pill-hp").textContent = hpOf(match.local, match.hitsOnLocal).left + " vs " + foeHp().left;
     // pagos pendientes
     const chips = [];
     const add = (cls, text, extra) => chips.push({ cls, text, extra });
@@ -487,7 +498,11 @@
 
   function flushHud() {
     const fighting = !!match && (match.phase === "attack" || match.phase === "defend" || match.phase === "resolving");
-    if (document.body.classList.contains("in-battle") !== fighting) document.body.classList.toggle("in-battle", fighting);
+    if (document.body.classList.contains("in-battle") !== fighting) {
+      document.body.classList.toggle("in-battle", fighting);
+      if (fighting) setOpen(false);
+    }
+    document.getElementById("hud-pill").classList.toggle("hidden", !fighting);
     const placingNow = !!match && (match.phase === "place" || match.phase === "sealed");
     if (document.body.classList.contains("placing") !== placingNow) document.body.classList.toggle("placing", placingNow);
     if (!hudDirty || !match) return;
@@ -3055,6 +3070,13 @@
     hudBtn.setAttribute("aria-pressed", off ? "false" : "true");
     blip();
   });
+  function setOpen(on) {
+    document.body.classList.toggle("hud-open", on);
+    const pill = document.getElementById("hud-pill");
+    pill.setAttribute("aria-expanded", on ? "true" : "false");
+    pill.querySelector(".chev").textContent = on ? "▴" : "▾";
+  }
+  document.getElementById("hud-pill").addEventListener("click", () => { setOpen(!document.body.classList.contains("hud-open")); blip(); });
   const foldBtn = document.getElementById("hud-fold");
   function setFold(on) {
     document.body.classList.toggle("hud-fold", on);
@@ -3133,6 +3155,7 @@
   window.__parquesState = () => match ? ({
     phase: match.phase,
     view: viewKind(),
+    hudOpen: document.body.classList.contains("hud-open"),
     place: { unplaced: match.local.filter((s) => s.unplaced).length, next: (match.local.find((s) => s.unplaced) || {}).name || null, handH: hand ? hand.horizontal : null, hasHand: !!hand, msg: (document.getElementById("place-msg") || {}).textContent || "" },
     ships: match.local.map((s) => s.name + (s.lifted ? "*" : "")).join(","),
     units: match.local.map((s) => ({ name: s.name, kind: s.kind, x: s.x, y: s.y, size: s.size, horizontal: s.horizontal, lifted: !!s.lifted })),

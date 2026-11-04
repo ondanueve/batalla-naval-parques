@@ -946,3 +946,62 @@ body:not(.placing) #place-msg { display: none; }
 #battle > #ready.hidden, body:not(.placing) #battle > #ready { display: none; }
 #battle > #ready:disabled { opacity: 0.55; }
 #battle > #ready.pulse { animation: toolPulse 1s ease-in-out infinite; border-color: #fde047; }
+
+/* ===== BATALLA MÍNIMA: HUD plegado por defecto, se abre tocando la píldora ===== */
+#hud-pill {
+  display: none; align-items: center; gap: 6px; align-self: center;
+  pointer-events: auto; cursor: pointer;
+  padding: 3px 10px; min-height: 24px; border-radius: 999px;
+  background: rgba(8, 14, 28, 0.42); color: #f1f5f9;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  font-family: inherit; font-size: 0.68rem; font-weight: 800; box-shadow: none;
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  opacity: 0.8;
+}
+body.in-battle #hud-pill { display: inline-flex; }
+#hud-pill.hidden { display: none !important; }
+#hud-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
+#hud-pill.mine .dot { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+#hud-pill em { font-style: normal; font-weight: 700; opacity: 0.8; }
+#hud-pill.l1 em { color: #fde047; } #hud-pill.l2 em { color: #fb923c; } #hud-pill.l3 em { color: #f87171; }
+#hud-pill strong { font-size: 0.66rem; opacity: 0.85; }
+#hud-pill .chev { opacity: 0.6; font-size: 0.7rem; }
+body.hud-open #hud-pill { opacity: 1; background: rgba(8, 14, 28, 0.6); }
+@media (min-width: 900px) and (min-height: 560px) { #hud-pill { align-self: flex-start; } }
+
+/* plegado: solo la píldora de arriba y la elección Disparar / Maniobrar abajo */
+body.in-battle:not(.hud-open) .hud,
+body.in-battle:not(.hud-open) #board-label,
+body.in-battle:not(.hud-open) #pips,
+body.in-battle:not(.hud-open) #dock-btns,
+body.in-battle:not(.hud-open) #warmeter,
+body.in-battle:not(.hud-open) #back,
+body.in-battle:not(.hud-open) #chips .chip.none,
+body.in-battle:not(.hud-open) #turnbar .or,
+body.in-battle:not(.hud-open) #turnbar .act small { display: none; }
+body.in-battle:not(.hud-open) #chips { min-height: 0; justify-content: center; }
+body.in-battle:not(.hud-open) #chips .chip { font-size: 0.64rem; padding: 0 7px; background: rgba(15, 23, 42, 0.5); }
+body.in-battle:not(.hud-open) #hud-bottom {
+  background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+  padding: 0 8px; gap: 4px; align-items: center;
+}
+body.in-battle:not(.hud-open) #turnbar { gap: 4px; align-items: center; }
+body.in-battle:not(.hud-open) #turnbar .choice { gap: 8px; justify-content: center; }
+body.in-battle:not(.hud-open) #turnbar .act {
+  flex: 0 1 132px; min-height: 34px; padding: 2px 10px; border-width: 1px; opacity: 0.72;
+  box-shadow: none; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+body.in-battle:not(.hud-open) #turnbar .act b { font-size: 0.8rem; }
+body.in-battle:not(.hud-open) #turnbar .act.shoot { background: rgba(153, 27, 27, 0.7); }
+body.in-battle:not(.hud-open) #turnbar .act.dev { background: rgba(14, 116, 144, 0.7); }
+body.in-battle:not(.hud-open) #turnbar .act[aria-pressed="true"] { opacity: 1; outline-width: 2px; }
+body.in-battle:not(.hud-open) #manu button { background: rgba(30, 41, 59, 0.7); min-height: 38px; }
+/* la crónica de lo último que pasó: un renglón transparente que se apaga solo */
+body.in-battle:not(.hud-open) #dialogue {
+  display: none; background: none; border: 0; text-align: center; padding: 0;
+  font-size: 0.78rem; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); min-height: 0; max-height: 2.6em;
+}
+body.in-battle.say-on:not(.hud-open) #dialogue { display: block; }
+@media (min-width: 900px) and (min-height: 560px) {
+  body.in-battle:not(.hud-open) #hud-bottom { left: 14px; width: 340px; }
+}
