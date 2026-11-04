@@ -86,6 +86,7 @@
         <canvas id="board" width="300" height="560"></canvas>
         <div id="clock" class="hidden">60</div>
         <div id="incoming">TE ATACAN</div>
+        <div id="banner" aria-live="polite"><b></b><small></small></div>
         <div id="end" class="hidden">
           <h2 id="end-title">Fin</h2>
           <button type="button" class="go" id="again">Volver al menú</button>
@@ -95,7 +96,7 @@
         <input id="link" readonly aria-label="Enlace de invitación">
         <button type="button" id="copy">Copiar</button>
       </div>
-      <div class="tools" id="tools">
+      <div class="tools" id="tools" role="group" aria-label="Acciones del turno">
         <button type="button" id="radar" disabled>Radar 2</button>
         <button type="button" id="bomb" disabled>Bomba 1</button>
         <button type="button" id="camo" disabled>Camu 1</button>

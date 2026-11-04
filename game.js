@@ -67,6 +67,15 @@
   let rings = [];
   let floats = [];
   let flashes = [];
+  let shocks = [];
+  let zoom = { z: 0, x: 0, y: 0 };
+  let hitstop = 0;
+  let slow = 0;
+  let flashScreen = 0;
+  let nowT = 0;
+  let fxDt = 0.016;
+  let mapCache = null;
+  const SPARKLES = Array.from({ length: 34 }, (_, i) => ({ x: (i * 37 % 100) / 100, y: (i * 61 % 100) / 100, ph: i * 1.7 }));
   let viewOverride = null;
   let armed = null;
   let hand = null;
@@ -173,6 +182,13 @@
     parts = [];
     rings = [];
     floats = [];
+    shocks = [];
+    flashes = [];
+    zoom.z = 0;
+    hitstop = 0;
+    slow = 0;
+    flashScreen = 0;
+    hideBanner();
     ui.end.classList.add("hidden");
     ui.battle.classList.add("hidden");
     ui.menu.classList.remove("hidden");
@@ -373,25 +389,101 @@
     return mapImgs[id];
   }
 
+  function vividMap(img, gw, gh) {
+    const w = Math.max(2, Math.round(gw));
+    const h = Math.max(2, Math.round(gh));
+    if (mapCache && mapCache.img === img && mapCache.w === w && mapCache.h === h) return mapCache.canvas;
+    const cv = document.createElement("canvas");
+    cv.width = w;
+    cv.height = h;
+    const c2 = cv.getContext("2d");
+    const hasFilter = "filter" in c2;
+    // auto-level: dark satellite shots get a bigger lift than already bright ones
+    let lum = 0.45;
+    try {
+      const sm = document.createElement("canvas");
+      sm.width = 16;
+      sm.height = 32;
+      const sc = sm.getContext("2d");
+      sc.drawImage(img, 0, 0, 16, 32);
+      const d = sc.getImageData(0, 0, 16, 32).data;
+      let t = 0;
+      for (let i = 0; i < d.length; i += 4) t += (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) / 255;
+      lum = t / (d.length / 4);
+    } catch (e) { /* tainted canvas: keep default */ }
+    const lift = Math.max(1.12, Math.min(2.1, 0.5 / Math.max(0.08, lum)));
+    if (hasFilter) c2.filter = "saturate(1.5) brightness(" + lift.toFixed(2) + ") contrast(1.1)";
+    c2.drawImage(img, 0, 0, w, h);
+    c2.filter = "none";
+    if (!hasFilter) {
+      // Browsers without canvas filters: lift the satellite shots with a soft-light wash instead.
+      c2.globalCompositeOperation = "soft-light";
+      c2.fillStyle = "rgba(255,255,255,.28)";
+      c2.fillRect(0, 0, w, h);
+      c2.globalCompositeOperation = "source-over";
+    }
+    const warm = c2.createLinearGradient(0, 0, w, h * 0.7);
+    warm.addColorStop(0, "rgba(255,236,190,.16)");
+    warm.addColorStop(1, "rgba(120,200,255,.06)");
+    c2.fillStyle = warm;
+    c2.fillRect(0, 0, w, h);
+    mapCache = { img, w, h, canvas: cv };
+    return cv;
+  }
+
   function draw(time) {
+    nowT = time;
     const g = gridGeom();
     const theme = THEME[opts.map] || THEME.nahuel;
     const w = ui.canvas.width;
     const h = ui.canvas.height;
     ctx.clearRect(0, 0, w, h);
-    const shake = trauma * trauma * 7 * g.dpr;
+    const shake = trauma * trauma * 11 * g.dpr;
     const ox = shake ? Math.sin(time / 17) * shake : 0;
-    const oy = shake ? Math.cos(time / 23) * shake * 0.45 : 0;
+    const oy = shake ? Math.cos(time / 23) * shake * 0.6 : 0;
     ctx.save();
     ctx.translate(ox, oy);
+    if (zoom.z > 0.002) {
+      ctx.translate(zoom.x, zoom.y);
+      ctx.scale(1 + zoom.z, 1 + zoom.z);
+      ctx.translate(-zoom.x, -zoom.y);
+    }
 
     const gw = g.cellW * C.W;
     const gh = g.cellH * C.H;
     const img = parkImage();
     if (img && img.complete && img.naturalWidth) {
-      ctx.drawImage(img, g.padL, g.padT, gw, gh);
-      ctx.fillStyle = "rgba(8,12,20,.16)";
-      ctx.fillRect(g.padL, g.padT, gw, gh);
+      ctx.drawImage(vividMap(img, gw, gh), g.padL, g.padT, gw, gh);
+      if (!reduceMotion) {
+        // slow light sweep + water glints so the park feels alive
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(g.padL, g.padT, gw, gh);
+        ctx.clip();
+        const sx = ((time / 11000) % 1.7 - 0.35) * gw;
+        const lg = ctx.createLinearGradient(g.padL + sx - gw * 0.28, g.padT, g.padL + sx + gw * 0.28, g.padT + gh * 0.55);
+        lg.addColorStop(0, "rgba(255,244,214,0)");
+        lg.addColorStop(0.5, "rgba(255,244,214,.16)");
+        lg.addColorStop(1, "rgba(255,244,214,0)");
+        ctx.globalCompositeOperation = "screen";
+        ctx.fillStyle = lg;
+        ctx.fillRect(g.padL, g.padT, gw, gh);
+        ctx.fillStyle = "#fff";
+        SPARKLES.forEach((sp) => {
+          const cx = Math.min(C.W - 1, Math.floor(sp.x * C.W));
+          const cy = Math.min(C.H - 1, Math.floor(sp.y * C.H));
+          if (isLand(cx, cy) && opts.terrain !== "agua") return;
+          const a = Math.max(0, Math.sin(time / 600 + sp.ph));
+          if (a < 0.2) return;
+          ctx.globalAlpha = a * 0.55;
+          const px = g.padL + (sp.x * C.W) * g.cellW;
+          const py = g.padT + (sp.y * C.H) * g.cellH;
+          const r = (0.8 + a * 1.6) * g.dpr;
+          ctx.fillRect(px - r, py - r * 0.3, r * 2, r * 0.6);
+          ctx.fillRect(px - r * 0.3, py - r, r * 0.6, r * 2);
+        });
+        ctx.restore();
+      }
     } else {
       const bg = ctx.createLinearGradient(0, 0, 0, h);
       bg.addColorStop(0, theme.deep);
@@ -400,18 +492,31 @@
       ctx.fillRect(g.padL, g.padT, gw, gh);
     }
 
-    for (let y = 0; y < C.H; y++) {
-      for (let x = 0; x < C.W; x++) {
-        const p = cellPx(g, x, y);
-        if (opts.terrain === "mixto") {
-          ctx.fillStyle = isLand(x, y) ? "rgba(250, 204, 21, .28)" : "rgba(56, 189, 248, .22)";
+    if (opts.terrain === "mixto") {
+      for (let y = 0; y < C.H; y++) {
+        for (let x = 0; x < C.W; x++) {
+          const p = cellPx(g, x, y);
+          ctx.fillStyle = isLand(x, y) ? "rgba(250, 204, 21, .15)" : "rgba(56, 189, 248, .09)";
           ctx.fillRect(p.x, p.y, g.cellW, g.cellH);
         }
-        ctx.strokeStyle = "rgba(255,255,255,.42)";
-        ctx.lineWidth = Math.max(1, g.dpr * 0.6);
-        ctx.strokeRect(p.x, p.y, g.cellW, g.cellH);
       }
     }
+    // grid: one soft dark line under one thin light line, so the map stays bright
+    ctx.beginPath();
+    for (let x = 0; x <= C.W; x++) { ctx.moveTo(g.padL + x * g.cellW, g.padT); ctx.lineTo(g.padL + x * g.cellW, g.padT + gh); }
+    for (let y = 0; y <= C.H; y++) { ctx.moveTo(g.padL, g.padT + y * g.cellH); ctx.lineTo(g.padL + gw, g.padT + y * g.cellH); }
+    ctx.save();
+    ctx.translate(0.6 * g.dpr, 0.6 * g.dpr);
+    ctx.strokeStyle = "rgba(4,10,24,.22)";
+    ctx.lineWidth = Math.max(1, g.dpr * 0.7);
+    ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = "rgba(255,255,255,.34)";
+    ctx.lineWidth = Math.max(1, g.dpr * 0.6);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,.55)";
+    ctx.lineWidth = Math.max(1.5, g.dpr * 1.2);
+    ctx.strokeRect(g.padL, g.padT, gw, gh);
 
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,.85)";
@@ -433,6 +538,10 @@
     if (match) drawPieces(g, time);
     drawFx(g);
     ctx.restore();
+    if (flashScreen > 0.01) {
+      ctx.fillStyle = "rgba(255,236,200," + (flashScreen * 0.42).toFixed(3) + ")";
+      ctx.fillRect(0, 0, w, h);
+    }
     flushHud();
   }
 
@@ -579,9 +688,10 @@
     if (local && match.local) {
       match.local.forEach((s) => {
         if (s.lifted) return;
-        drawHull(g, s, 1);
+        const sunk = C.shipStatus(s, match.hitsOnLocal).sunk;
+        drawHull(g, s, 1, sunk ? "#6b7280" : undefined);
         C.cellsOf(s).forEach((c) => {
-          if (match.hitsOnLocal.has(C.key(c.x, c.y))) drawMark(g, c.x, c.y, "hit");
+          if (match.hitsOnLocal.has(C.key(c.x, c.y))) drawMark(g, c.x, c.y, sunk ? "sunk" : "hit");
         });
       });
       match.hitsOnLocal.forEach((k) => {
@@ -612,14 +722,39 @@
         if (!w.cells || !w.cells.length) return;
         const horizontal = w.cells.length < 2 || w.cells[0].y === w.cells[1].y;
         const spec = (C.FLEETS[opts.terrain] || []).find((s) => s.name === w.name);
-        drawHull(g, {
+        const unit = {
           x: Math.min.apply(null, w.cells.map((c) => c.x)),
           y: Math.min.apply(null, w.cells.map((c) => c.y)),
           size: w.cells.length,
           horizontal,
           kind: spec ? spec.kind : "barco",
           color: "#64748b"
-        }, 0.95, "#64748b");
+        };
+        const age = w.t0 ? (performance.now() - w.t0) / 1000 : 9;
+        const mid = cellPx(g, unit.x + (horizontal ? unit.size / 2 - 0.5 : 0), unit.y + (horizontal ? 0 : unit.size / 2 - 0.5));
+        const mx = mid.x + g.cellW / 2;
+        const my = mid.y + g.cellH / 2;
+        // oil slick under the wreck, growing slowly
+        ctx.save();
+        ctx.fillStyle = "rgba(8,10,16,.34)";
+        ctx.beginPath();
+        const grow = Math.min(1, age / 2.2);
+        ctx.ellipse(mx, my, (horizontal ? unit.size * 0.62 : 0.9) * g.cellW * (0.6 + grow * 0.4), (horizontal ? 0.9 : unit.size * 0.62) * g.cellH * (0.6 + grow * 0.4), 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.save();
+        if (age < 1.4 && !reduceMotion) {
+          ctx.translate(mx, my);
+          ctx.rotate(Math.sin(age * 11) * (1 - age / 1.4) * 0.09);
+          ctx.translate(-mx, -my);
+        }
+        drawHull(g, unit, 0.95, "#64748b");
+        if (age < 1.4) {
+          ctx.globalAlpha = 1 - age / 1.4;
+          drawHull(g, unit, 0.85, "#ef4444");
+          ctx.globalAlpha = 1;
+        }
+        ctx.restore();
       });
       match.intelShip.forEach((k) => {
         if (match.remoteMarks.get(k)) return;
@@ -638,7 +773,7 @@
       });
       match.remoteMarks.forEach((kind, k) => {
         const [x, y] = k.split(",").map(Number);
-        drawMark(g, x, y, kind === "sunk" ? "hit" : kind);
+        drawMark(g, x, y, kind);
       });
       if (match.phase === "attack" && preview && C.inBounds(preview.x, preview.y)) {
         const cells = armed === "radar" ? C.area(preview.x, preview.y) : armed === "bomb" ? C.cross(preview.x, preview.y) : [preview];
@@ -658,12 +793,77 @@
     });
   }
 
+  function spawnSmoke(cx, cy, g, strong) {
+    if (reduceMotion || parts.length > 340) return;
+    if (Math.random() < (strong ? 3.4 : 1.1) * fxDt) {
+      parts.push({
+        kind: "smoke",
+        x: cx + (Math.random() - 0.5) * g.cellW * 0.4,
+        y: cy - g.cellH * 0.1,
+        vx: (6 + Math.random() * 14) * g.dpr,
+        vy: -(16 + Math.random() * 22) * g.dpr,
+        r: g.cellW * (0.12 + Math.random() * 0.08),
+        grow: g.cellW * 0.42,
+        life: 1,
+        decay: 0.5 + Math.random() * 0.3,
+        g: 0
+      });
+    }
+    if (strong && Math.random() < 1.1 * fxDt) {
+      parts.push({
+        kind: "spark",
+        x: cx + (Math.random() - 0.5) * g.cellW * 0.5,
+        y: cy,
+        vx: (Math.random() - 0.5) * 22 * g.dpr,
+        vy: -(30 + Math.random() * 40) * g.dpr,
+        r: (0.8 + Math.random() * 1.2) * g.dpr,
+        life: 1,
+        decay: 1.1,
+        g: -10,
+        color: "#fdba74"
+      });
+    }
+  }
+
+  function drawFlame(cx, cy, r, t, seed) {
+    const f = 0.8 + 0.2 * Math.sin(t / 80 + seed) + 0.1 * Math.sin(t / 31 + seed * 3);
+    const sway = Math.sin(t / 140 + seed) * r * 0.18;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const R = r * 1.5 * f;
+    const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+    gr.addColorStop(0, "rgba(255,245,170,.95)");
+    gr.addColorStop(0.35, "rgba(255,150,40,.7)");
+    gr.addColorStop(1, "rgba(220,38,38,0)");
+    ctx.fillStyle = gr;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,170,50,.7)";
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.42, cy + r * 0.35);
+    ctx.quadraticCurveTo(cx - r * 0.5 + sway, cy - R * 0.5, cx + sway * 2, cy - R * 1.05);
+    ctx.quadraticCurveTo(cx + r * 0.5 + sway, cy - R * 0.5, cx + r * 0.42, cy + r * 0.35);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
   function drawMark(g, x, y, kind) {
     const p = cellPx(g, x, y);
     const cx = p.x + g.cellW / 2;
     const cy = p.y + g.cellH / 2;
     const rad = Math.min(g.cellW, g.cellH) * 0.28;
     if (kind === "miss" || kind === "ping") {
+      const seed = x * 7 + y * 13;
+      if (kind === "miss" && !reduceMotion) {
+        const ph = ((nowT / 2200) + seed * 0.37) % 1;
+        ctx.strokeStyle = "rgba(255,255,255," + (0.5 * (1 - ph)).toFixed(3) + ")";
+        ctx.lineWidth = Math.max(1, g.dpr);
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad * (0.6 + ph * 1.5), 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.strokeStyle = kind === "ping" ? "rgba(226,232,240,.75)" : "#f8fafc";
       ctx.lineWidth = Math.max(1.5, 2 * g.dpr * 0.6);
       ctx.beginPath();
@@ -671,7 +871,27 @@
       ctx.stroke();
       return;
     }
-    ctx.strokeStyle = "#fff1f2";
+    const seed = x * 7 + y * 13;
+    const burning = kind === "hit";
+    // scorch mark under the fire
+    ctx.fillStyle = "rgba(10,8,8,.5)";
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, g.cellW * 0.42, g.cellH * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (burning) {
+      drawFlame(cx, cy + g.cellH * 0.05, Math.min(g.cellW, g.cellH) * 0.46, nowT, seed);
+      spawnSmoke(cx, cy, g, true);
+    } else {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = "rgba(255,120,40," + (0.16 + 0.08 * Math.sin(nowT / 400 + seed)).toFixed(3) + ")";
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      spawnSmoke(cx, cy, g, false);
+    }
+    ctx.strokeStyle = burning ? "#fff1f2" : "rgba(255,241,242,.75)";
     ctx.lineWidth = Math.max(2, 2.4 * g.dpr);
     ctx.beginPath();
     ctx.moveTo(cx - rad, cy - rad);
@@ -683,17 +903,55 @@
 
   function drawFx(g) {
     rings.forEach((r) => {
+      if (r.delay > 0) return;
       const p = cellPx(g, r.x, r.y);
       ctx.strokeStyle = r.color;
       ctx.globalAlpha = Math.max(0, r.life);
-      ctx.lineWidth = 3;
+      ctx.lineWidth = (r.w || 3) * g.dpr * 0.8 * Math.max(0.3, r.life);
       ctx.beginPath();
-      ctx.arc(p.x + g.cellW / 2, p.y + g.cellH / 2, (1 - r.life) * g.cellW * 1.15, 0, Math.PI * 2);
+      ctx.arc(p.x + g.cellW / 2, p.y + g.cellH / 2, (1 - r.life) * g.cellW * (r.size || 1.15), 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
     });
+    shocks.forEach((s) => {
+      const rad = Math.max(0, 1 - s.life) * s.max;
+      if (rad < 2) return;
+      const a = Math.min(1, Math.max(0, s.life));
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const gr = ctx.createRadialGradient(s.px, s.py, rad * 0.55, s.px, s.py, Math.max(1, rad));
+      gr.addColorStop(0, "rgba(255,255,255,0)");
+      gr.addColorStop(0.8, s.color.replace("A", (a * 0.45).toFixed(3)));
+      gr.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = gr;
+      ctx.beginPath();
+      ctx.arc(s.px, s.py, Math.max(1, rad), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
     parts.forEach((p) => {
-      ctx.globalAlpha = Math.max(0, p.life);
+      const a = Math.max(0, p.life);
+      if (p.kind === "smoke") {
+        ctx.globalAlpha = Math.min(0.36, a * 0.42);
+        ctx.fillStyle = "#2c3038";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        return;
+      }
+      if (p.kind === "spark") {
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = a;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * (0.6 + a * 0.6), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        return;
+      }
+      ctx.globalAlpha = a;
       ctx.fillStyle = p.color;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
@@ -702,46 +960,151 @@
     });
     floats.forEach((f) => {
       ctx.globalAlpha = Math.max(0, Math.min(1, f.life * 1.4));
-      ctx.fillStyle = f.color;
-      ctx.font = "800 " + Math.floor(14 * (g.dpr || 1)) + "px Nunito, sans-serif";
+      ctx.font = "800 " + Math.floor((f.size || 14) * (g.dpr || 1)) + "px Nunito, sans-serif";
       ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = 3 * g.dpr;
+      ctx.strokeStyle = "rgba(2,6,23,.85)";
+      ctx.strokeText(f.text, f.x, f.y);
+      ctx.fillStyle = f.color;
       ctx.fillText(f.text, f.x, f.y);
       ctx.globalAlpha = 1;
     });
   }
 
-  function burst(x, y, color) {
-    const g = gridGeom();
+  function cellCenter(g, x, y) {
     const p = cellPx(g, x, y);
-    const cx = p.x + g.cellW / 2;
-    const cy = p.y + g.cellH / 2;
-    const n = reduceMotion ? 6 : 16;
-    for (let i = 0; i < n; i++) {
-      const a = (Math.PI * 2 * i) / n + Math.random() * 0.2;
-      const sp = (70 + Math.random() * 140) * g.dpr;
-      parts.push({
-        x: cx, y: cy,
-        vx: Math.cos(a) * sp,
-        vy: Math.sin(a) * sp,
-        r: (2 + Math.random() * 3) * g.dpr,
-        life: 1,
-        color
-      });
-    }
-    rings.push({ x, y, life: 1, color });
-    flashes.push({ x, y, life: 1 });
-    floats.push({
-      x: cx,
-      y: cy,
-      vy: -36 * g.dpr,
-      life: 1,
-      color,
-      text: color === "#ef4444" ? "TOCADO" : color === "#facc15" ? "BLOQUEO" : "AGUA"
-    });
+    return { x: p.x + g.cellW / 2, y: p.y + g.cellH / 2 };
   }
 
-  function shake(localHit) {
-    trauma = Math.min(1, trauma + (localHit ? 0.85 : 0.4));
+  function addParts(n, o) {
+    for (let i = 0; i < n; i++) {
+      const a = o.arc ? o.arc[0] + Math.random() * (o.arc[1] - o.arc[0]) : Math.random() * Math.PI * 2;
+      const sp = o.sp[0] + Math.random() * (o.sp[1] - o.sp[0]);
+      parts.push({
+        kind: o.kind,
+        x: o.x + (Math.random() - 0.5) * (o.spread || 0),
+        y: o.y + (Math.random() - 0.5) * (o.spread || 0),
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        r: o.r[0] + Math.random() * (o.r[1] - o.r[0]),
+        grow: o.grow || 0,
+        life: 1,
+        decay: o.decay[0] + Math.random() * (o.decay[1] - o.decay[0]),
+        g: o.g,
+        color: Array.isArray(o.color) ? o.color[Math.floor(Math.random() * o.color.length)] : o.color
+      });
+    }
+  }
+
+  function plateFlash(incoming) {
+    if (!match) return;
+    const side = incoming ? match.role : (match.role === "arg" ? "inv" : "arg");
+    const el = document.getElementById("plate-" + side);
+    if (!el) return;
+    el.classList.remove("dmg");
+    void el.offsetWidth;
+    el.classList.add("dmg");
+    setTimeout(() => el.classList.remove("dmg"), 600);
+  }
+
+  function fxHit(x, y, incoming) {
+    const g = gridGeom();
+    const c = cellCenter(g, x, y);
+    const k = reduceMotion ? 0.4 : 1;
+    addParts(Math.round(18 * k), { kind: "spark", x: c.x, y: c.y, sp: [60 * g.dpr, 230 * g.dpr], r: [1.2 * g.dpr, 3 * g.dpr], decay: [1.2, 2.2], g: 150 * g.dpr, color: ["#fde047", "#fb923c", "#fff7ed"] });
+    addParts(Math.round(7 * k), { kind: "debris", x: c.x, y: c.y, sp: [50 * g.dpr, 150 * g.dpr], r: [1.5 * g.dpr, 3 * g.dpr], decay: [1.0, 1.6], g: 260 * g.dpr, color: ["#1f2937", "#475569", "#7f1d1d"] });
+    addParts(Math.round(5 * k), { kind: "smoke", x: c.x, y: c.y, spread: g.cellW * 0.4, sp: [8 * g.dpr, 40 * g.dpr], arc: [-Math.PI * 0.95, -Math.PI * 0.05], r: [g.cellW * 0.16, g.cellW * 0.28], grow: g.cellW * 0.9, decay: [0.45, 0.8], g: 0 });
+    rings.push({ x, y, life: 1, color: "#fff7ed", size: 2.3, w: 4 });
+    rings.push({ x, y, life: 1, color: "#fb923c", size: 1.5, w: 3, delay: 0.04 });
+    shocks.push({ px: c.x, py: c.y, life: 1, max: g.cellW * 3.2, color: "rgba(255,200,120,A)" });
+    flashes.push({ x, y, life: 1 });
+    floats.push({ x: c.x, y: c.y, vy: -38 * g.dpr, life: 1, color: "#fca5a5", text: "TOCADO", size: 14 });
+    shake(incoming, 0.55);
+    plateFlash(incoming);
+    if (!reduceMotion) hitstop = Math.max(hitstop, 0.05);
+  }
+
+  function fxMiss(x, y) {
+    const g = gridGeom();
+    const c = cellCenter(g, x, y);
+    const land = isLand(x, y);
+    const k = reduceMotion ? 0.4 : 1;
+    if (land) {
+      addParts(Math.round(10 * k), { kind: "smoke", x: c.x, y: c.y, spread: g.cellW * 0.3, sp: [10 * g.dpr, 50 * g.dpr], r: [g.cellW * 0.1, g.cellW * 0.2], grow: g.cellW * 0.6, decay: [0.8, 1.3], g: 0 });
+      floats.push({ x: c.x, y: c.y, vy: -30 * g.dpr, life: 1, color: "#fde68a", text: "VACÍO", size: 12 });
+    } else {
+      addParts(Math.round(12 * k), { kind: "drop", x: c.x, y: c.y, sp: [50 * g.dpr, 150 * g.dpr], arc: [-Math.PI * 0.9, -Math.PI * 0.1], r: [1 * g.dpr, 2.4 * g.dpr], decay: [1.3, 2], g: 340 * g.dpr, color: ["#e0f2fe", "#ffffff", "#bae6fd"] });
+      floats.push({ x: c.x, y: c.y, vy: -30 * g.dpr, life: 1, color: "#e0f2fe", text: "AGUA", size: 12 });
+    }
+    rings.push({ x, y, life: 1, color: "#e0f2fe", size: 1.7, w: 3 });
+    rings.push({ x, y, life: 1, color: "#ffffff", size: 1.1, w: 2, delay: 0.1 });
+  }
+
+  function fxSunk(r, incoming) {
+    const g = gridGeom();
+    const cells = r.cells && r.cells.length ? r.cells : [{ x: r.x, y: r.y }];
+    let sx = 0;
+    let sy = 0;
+    cells.forEach((c) => { const p = cellCenter(g, c.x, c.y); sx += p.x; sy += p.y; });
+    sx /= cells.length;
+    sy /= cells.length;
+    const k = reduceMotion ? 0.35 : 1;
+    cells.forEach((c, i) => {
+      const p = cellCenter(g, c.x, c.y);
+      addParts(Math.round(10 * k), { kind: "spark", x: p.x, y: p.y, sp: [80 * g.dpr, 280 * g.dpr], r: [1.4 * g.dpr, 3.4 * g.dpr], decay: [0.9, 1.8], g: 170 * g.dpr, color: ["#fde047", "#fb923c", "#ef4444", "#fff7ed"] });
+      addParts(Math.round(5 * k), { kind: "debris", x: p.x, y: p.y, sp: [60 * g.dpr, 200 * g.dpr], r: [2 * g.dpr, 4.5 * g.dpr], decay: [0.7, 1.2], g: 280 * g.dpr, color: ["#111827", "#475569", "#7f1d1d", "#9ca3af"] });
+      addParts(Math.round(4 * k), { kind: "smoke", x: p.x, y: p.y, spread: g.cellW * 0.5, sp: [10 * g.dpr, 60 * g.dpr], arc: [-Math.PI * 0.95, -Math.PI * 0.05], r: [g.cellW * 0.2, g.cellW * 0.36], grow: g.cellW * 1.2, decay: [0.35, 0.65], g: 0 });
+      rings.push({ x: c.x, y: c.y, life: 1, color: "#fef3c7", size: 2.8, w: 5, delay: i * 0.07 });
+    });
+    shocks.push({ px: sx, py: sy, life: 1, max: g.cellW * 7, color: "rgba(255,170,80,A)" });
+    shocks.push({ px: sx, py: sy, life: 1.25, max: g.cellW * 10, color: "rgba(255,255,255,A)" });
+    floats.push({ x: sx, y: sy - g.cellH * 0.6, vy: -26 * g.dpr, life: 1.4, color: incoming ? "#fecaca" : "#fde047", text: incoming ? "PERDIDO" : "HUNDIDO", size: 22 });
+    shake(incoming, 1);
+    if (!reduceMotion) {
+      hitstop = 0.13;
+      slow = 1.0;
+      flashScreen = 1;
+      zoom.z = 0.075;
+      zoom.x = sx;
+      zoom.y = sy;
+    }
+    showBanner(incoming ? "¡PERDISTE EL " + String(r.ship || "").toUpperCase() + "!" : "¡HUNDIDO!", incoming ? "El invasor te lo hundió" : (r.ship || ""), incoming ? "bad" : "good");
+    const j = juke();
+    if (j && j.sfx.boom) j.sfx.boom();
+  }
+
+  let bannerTimer = 0;
+  function showBanner(title, sub, kind) {
+    const el = document.getElementById("banner");
+    if (!el) return;
+    el.querySelector("b").textContent = title;
+    el.querySelector("small").textContent = sub || "";
+    el.className = "";
+    void el.offsetWidth;
+    el.className = "show " + (kind || "good");
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(hideBanner, 1700);
+  }
+  function hideBanner() {
+    const el = document.getElementById("banner");
+    if (el) el.className = "";
+  }
+
+  function burst(x, y, color) {
+    const g = gridGeom();
+    const c = cellCenter(g, x, y);
+    const n = reduceMotion ? 6 : 14;
+    addParts(n, { kind: "spark", x: c.x, y: c.y, sp: [50 * g.dpr, 160 * g.dpr], r: [1.5 * g.dpr, 3 * g.dpr], decay: [1.2, 2], g: 60 * g.dpr, color });
+    rings.push({ x, y, life: 1, color, size: 3.4, w: 3 });
+    rings.push({ x, y, life: 1, color, size: 1.8, w: 2, delay: 0.12 });
+    shocks.push({ px: c.x, py: c.y, life: 1, max: g.cellW * 3.4, color: color === "#facc15" ? "rgba(250,204,21,A)" : "rgba(255,255,255,A)" });
+    floats.push({ x: c.x, y: c.y, vy: -34 * g.dpr, life: 1, color, text: color === "#facc15" ? "BLOQUEO" : "", size: 13 });
+  }
+
+  function shake(localHit, power) {
+    const p = power || 0.6;
+    trauma = Math.min(1, trauma + (localHit ? p * 1.2 : p * 0.75));
     if (!reduceMotion) {
       ui.stage.classList.remove("shake");
       void ui.stage.offsetWidth;
@@ -776,18 +1139,20 @@
     viewOverride = incoming ? "local" : "remote";
     hudDirty = true;
     if (incoming) ui.stage.classList.add("under-fire");
-    let harsh = false;
+    let sunkAny = false;
     const j = juke();
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       if (r.kind === "hit" || r.kind === "sunk") {
-        burst(r.x, r.y, "#ef4444");
-        if (r.kind === "sunk" && floats.length) floats[floats.length - 1].text = "HUNDIDO";
-        harsh = true;
+        fxHit(r.x, r.y, incoming);
         if (j) j.sfx.hit();
-        if (r.kind === "sunk" && j) j.sfx.sunk();
+        if (r.kind === "sunk") {
+          sunkAny = true;
+          fxSunk(r, incoming);
+          if (j) j.sfx.sunk();
+        }
       } else if (r.kind === "miss") {
-        burst(r.x, r.y, "#e0f2fe");
+        fxMiss(r.x, r.y);
         if (j) j.sfx.miss();
       } else if (r.kind === "shield") {
         burst(r.x, r.y, "#facc15");
@@ -795,10 +1160,9 @@
       }
       if (i < results.length - 1) await WAIT(incoming ? 200 : 120);
     }
-    if (harsh) shake(incoming);
     say(narrate(results, incoming));
     hudDirty = true;
-    await WAIT(incoming ? 880 : 520);
+    await WAIT((incoming ? 880 : 520) + (sunkAny ? 750 : 0));
     ui.stage.classList.remove("under-fire");
     viewOverride = null;
     hudDirty = true;
@@ -1164,7 +1528,7 @@
       if (r.kind === "sunk") {
         const cells = r.cells && r.cells.length ? r.cells : [{ x: r.x, y: r.y }];
         cells.forEach((c) => match.remoteMarks.set(C.key(c.x, c.y), "sunk"));
-        if (!match.wrecks.some((w) => w.name === r.ship)) match.wrecks.push({ name: r.ship, cells });
+        if (!match.wrecks.some((w) => w.name === r.ship)) match.wrecks.push({ name: r.ship, cells, t0: performance.now() });
       }
     });
     hudDirty = true;
@@ -1485,18 +1849,31 @@
 
   function loop(t) {
     try {
-      const dt = Math.min(0.05, lastT ? (t - lastT) / 1000 : 0.016);
+      const rdt = Math.min(0.05, lastT ? (t - lastT) / 1000 : 0.016);
       lastT = t;
-      trauma = Math.max(0, trauma - dt * 1.6);
+      let ts = 1;
+      if (hitstop > 0) { hitstop -= rdt; ts = 0.03; }
+      else if (slow > 0) {
+        slow -= rdt;
+        ts = slow > 0.4 ? 0.3 : 0.3 + ((0.4 - Math.max(0, slow)) / 0.4) * 0.7;
+      }
+      const dt = rdt * ts;
+      fxDt = Math.max(dt, 0.0001);
+      trauma = Math.max(0, trauma - rdt * 1.5);
+      zoom.z = Math.max(0, zoom.z - rdt * (slow > 0 ? 0.03 : 0.12));
+      flashScreen = Math.max(0, flashScreen - rdt * 2.2);
       parts.forEach((p) => {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
-        p.vy += 90 * dt * (ui.canvas.width / 300);
-        p.life -= dt * 1.6;
+        p.vy += (p.g === undefined ? 90 * (ui.canvas.width / 300) : p.g) * dt;
+        if (p.grow) p.r += p.grow * dt;
+        p.life -= dt * (p.decay || 1.6);
       });
       parts = parts.filter((p) => p.life > 0);
-      rings.forEach((r) => { r.life -= dt * 1.8; });
+      rings.forEach((r) => { if (r.delay > 0) r.delay -= dt; else r.life -= dt * 1.5; });
       rings = rings.filter((r) => r.life > 0);
+      shocks.forEach((s) => { s.life -= dt * 1.7; });
+      shocks = shocks.filter((s) => s.life > 0);
       flashes.forEach((f) => { f.life -= dt * 3.2; });
       flashes = flashes.filter((f) => f.life > 0);
       floats.forEach((f) => {

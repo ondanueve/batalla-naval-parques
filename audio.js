@@ -705,6 +705,11 @@ K:G
       setTimeout(() => tone(523, 0.1, "square", 0.1), 90);
       setTimeout(() => tone(659, 0.2, "square", 0.12), 180);
     },
+    boom() {
+      tone(70, 0.7, "sawtooth", 0.22, 26);
+      tone(140, 0.35, "square", 0.1, 45);
+      setTimeout(() => tone(48, 0.5, "triangle", 0.2, 24), 60);
+    },
     shield() { tone(880, 0.16, "triangle", 0.1, 1320); },
     alarm() {
       if (musicGain) {

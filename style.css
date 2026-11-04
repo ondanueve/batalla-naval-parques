@@ -428,3 +428,54 @@ body[data-map="glaciares"] .hero-art {
 #juke-panel input[type="range"] { width: 100%; margin: 4px 0 8px; }
 #juke-paper { position: absolute; left: -9999px; top: 0; width: 480px; }
 #boot-note { padding: 24px; text-align: center; }
+
+/* FX: banner de hundimiento, daño en el HUD */
+#banner {
+  position: absolute;
+  left: 0; right: 0; top: 34%;
+  z-index: 6;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  text-align: center;
+  padding: 0 8px;
+}
+#banner.show { display: flex; animation: bannerIn 1.7s cubic-bezier(.2,.9,.25,1) forwards; }
+#banner b {
+  font-family: "Press Start 2P", monospace;
+  font-size: clamp(0.8rem, 3.8vw, 1.25rem);
+  line-height: 1.4;
+  color: #fde047;
+  text-shadow: 0 3px 0 #7c2d12, 0 0 18px rgba(251, 146, 60, 0.9), 3px 3px 0 #000;
+}
+#banner small {
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  color: #fff;
+  background: rgba(2, 6, 23, 0.72);
+  border-radius: 999px;
+  padding: 2px 12px;
+}
+#banner.bad b { color: #fecaca; text-shadow: 0 3px 0 #450a0a, 0 0 18px rgba(239, 68, 68, 0.95), 3px 3px 0 #000; }
+@keyframes bannerIn {
+  0% { opacity: 0; transform: scale(0.4) rotate(-3deg); }
+  14% { opacity: 1; transform: scale(1.18) rotate(1deg); }
+  26% { transform: scale(1) rotate(0); }
+  78% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-14px) scale(1.02); }
+}
+.plate.dmg { animation: plateHit 0.55s ease; }
+@keyframes plateHit {
+  0%, 100% { transform: translateX(0); filter: none; }
+  15% { transform: translateX(-5px) rotate(-1deg); filter: brightness(1.25) saturate(1.6) hue-rotate(-18deg); }
+  35% { transform: translateX(5px) rotate(1deg); }
+  60% { transform: translateX(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .plate.dmg, #banner.show { animation: none; }
+  #banner.show { opacity: 1; }
+}
