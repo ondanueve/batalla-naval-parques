@@ -48,9 +48,14 @@
     endTitle: document.getElementById("end-title"),
     stage: document.getElementById("stage"),
     hurt: document.getElementById("hurt"),
-    radar: document.getElementById("radar"),
-    bomb: document.getElementById("bomb"),
-    camo: document.getElementById("camo"),
+    turnbar: document.getElementById("turnbar"),
+    warmeter: document.getElementById("warmeter"),
+    warName: document.getElementById("war-name"),
+    warSub: document.getElementById("war-sub"),
+    chips: document.getElementById("chips"),
+    shoot: document.getElementById("act-shoot"),
+    dev: document.getElementById("act-dev"),
+    manu: document.getElementById("manu"),
     rotate: document.getElementById("rotate"),
     ready: document.getElementById("ready")
   };
@@ -77,7 +82,8 @@
   let mapCache = null;
   const SPARKLES = Array.from({ length: 34 }, (_, i) => ({ x: (i * 37 % 100) / 100, y: (i * 61 % 100) / 100, ph: i * 1.7 }));
   let viewOverride = null;
-  let armed = null;
+  const sel = { mode: "shoot", unit: null, dest: null, initOn: false, open: false };
+  const PK_COLOR = { torre: "#22d3ee", artilleria: "#fb923c", blindaje: "#4ade80", iniciativa: "#fde047" };
   let hand = null;
   let dragging = false;
   let moved = false;
@@ -115,10 +121,10 @@
   let tutoForce = false;
   const TUTO_COPY = {
     0: ["PREPARACIÓN", "Tu flota ya está puesta (podés arrastrarla). Tocá «Estoy listo» para empezar."],
-    1: ["PASO 1 DE 3 · DISPARAR", "El enemigo está escondido. Tocá cualquier celda del mapa para disparar."],
-    2: ["PASO 2 DE 3 · RADAR", "Tocá «Radar» y después el centro de un área: revela contactos 3×3 y no gasta el turno."],
-    3: ["PASO 3 DE 3 · CAMUFLAJE", "Tocá «Camu»: el próximo ataque enemigo no te deja marca. Usalo cuando te tengan cerca."],
-    4: ["¡LISTO!", "Ya sabés jugar. Hundí toda la flota enemiga antes de que hundan la tuya."]
+    1: ["PASO 1 DE 3 · DISPARAR", "Disparar da daño ahora. Tocá cualquier celda del mapa enemigo: no sabés dónde está nadie."],
+    2: ["PASO 2 DE 3 · DESARROLLAR", "Maniobrar no hace daño, pero rinde después. Tocá «Maniobrar» y elegí «Apuntar»: el próximo disparo cae en cruz."],
+    3: ["PASO 3 DE 3 · COBRAR", "Tocá «Disparar» y una celda: tu carga cae en cruz. Esa es la inversión pagando."],
+    4: ["¡LISTO!", "Disparar gana material. Maniobrar gana posición. Repetir una celda es válido: lo que ves viejo puede haber cambiado."]
   };
 
   function tutoSave() { store.set(KEY_TUTO, "1"); }
@@ -129,8 +135,6 @@
     if (!tuto) {
       box.classList.add("hidden");
       pulseOn(ui.ready, false);
-      pulseOn(ui.radar, false);
-      pulseOn(ui.camo, false);
       requestAnimationFrame(fit);
       return;
     }
@@ -141,8 +145,6 @@
     document.getElementById("coach-skip").classList.toggle("hidden", tuto.step === 4);
     box.classList.remove("hidden");
     pulseOn(ui.ready, tuto.step === 0);
-    pulseOn(ui.radar, tuto.step === 2);
-    pulseOn(ui.camo, tuto.step === 3);
     requestAnimationFrame(fit);
   }
   function tutoStart() {
@@ -162,18 +164,24 @@
     if (!tuto) return;
     if (name === "ready" && tuto.step === 0) { tuto.step = 1; tutoRender(); }
     else if (name === "shot" && tuto.step === 1) tuto.pending = 2;
-    else if (name === "radar" && tuto.step === 2) { tuto.step = 3; tutoRender(); }
-    else if (name === "camo" && tuto.step === 3) { tuto.step = 4; tutoSave(); tutoRender(); }
+    else if (name === "man" && tuto.step === 2) tuto.pending = 3;
+    else if (name === "shot" && tuto.step === 3) tuto.pending = 4;
   }
   function tutoTurn() {
-    if (tuto && tuto.pending) { tuto.step = tuto.pending; tuto.pending = 0; tutoRender(); }
+    if (tuto && tuto.pending) {
+      tuto.step = tuto.pending;
+      tuto.pending = 0;
+      if (tuto.step === 4) tutoSave();
+      tutoRender();
+      hudDirty = true;
+    }
   }
 
   const logList = document.getElementById("log-list");
   let lastSay = "";
   function say(text) {
     ui.dialogue.textContent = text;
-    if (logList && text && text !== lastSay && !/^(Tu turno\.|El invasor apunta)/.test(text)) {
+    if (logList && text && text !== lastSay && !/^(Tu turno\.|El invasor apunta|El invasor piensa|Disparo en camino|Disparar da|Esperando|Bombardeo:)/.test(text)) {
       lastSay = text;
       const li = document.createElement("li");
       li.textContent = text;
@@ -269,7 +277,6 @@
     destroyNet();
     match = null;
     hand = null;
-    armed = null;
     viewOverride = null;
     resetFx();
     tuto = null;
@@ -350,6 +357,7 @@
     if (viewOverride) return viewOverride;
     if (!match) return "local";
     if (match.phase === "place" || match.phase === "sealed" || match.phase === "defend" || match.phase === "lobby") return "local";
+    if (match.phase === "attack" && (sel.mode === "move" || sel.mode === "repair")) return "local";
     return "remote";
   }
 
@@ -395,6 +403,84 @@
     });
   }
 
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+
+  function paintTurnbar(combat) {
+    const sh = match.shared;
+    ui.turnbar.classList.toggle("hidden", !(combat && sh));
+    if (!combat || !sh) return;
+    const lvl = C.warLevel(sh);
+    const round = C.roundOf(sh);
+    ui.warmeter.className = "l" + lvl;
+    ui.warName.textContent = C.WAR_NAMES[lvl].toUpperCase();
+    const left = C.roundsToNextLevel(sh);
+    ui.warSub.textContent = lvl >= 3 ? "Ronda " + round + " · sin maniobras" : "Ronda " + round + " · " + plural(left, "ronda", "rondas") + " para " + C.WAR_NAMES[lvl + 1];
+    ui.warmeter.querySelector(".wm i").style.width = Math.min(100, Math.round((Math.min(round, 18) / 18) * 100)) + "%";
+    const myTurn = match.phase === "attack";
+    const side = match.side;
+    // pagos pendientes
+    const chips = [];
+    const add = (cls, text, extra) => chips.push({ cls, text, extra });
+    if (side.charge > 0 && sh.turnNo < side.chargeUntil) {
+      const r = Math.max(1, Math.ceil((side.chargeUntil - sh.turnNo) / 2));
+      add("aim", "⊕ Carga " + (side.charge >= 2 ? "área 3×3" : "en cruz") + " · caduca en " + plural(r, "ronda", "rondas"));
+    }
+    if (side.init > 0 && sh.turnNo < side.initUntil) add("init", sel.initOn ? "⚡ Iniciativa ACTIVA: jugás dos veces" : "⚡ Iniciativa: tocá para usarla", true);
+    const armor = match.local.reduce((a, s) => a + (s.armor > 0 ? s.armor : 0), 0);
+    if (armor > 0) add("armor", "◆ Blindaje ×" + armor);
+    C.zonesOf(sh, myWho()).forEach((z) => {
+      if (z.tower) return;
+      add("watch", "◎ Vigilancia · " + plural(Math.max(1, Math.ceil((z.until - sh.turnNo) / 2)), "ronda", "rondas"));
+    });
+    const towers = sh.pickups.filter((p) => p.type === "torre" && p.owner === myWho()).length;
+    if (towers) add("tower", "▲ Torre ×" + towers);
+    const foeZ = C.zonesOf(sh, foeWho());
+    if (foeZ.length && C.spottedCells(side, foeZ).length) add("seen", "Te están viendo");
+    let old = 0;
+    match.know.marks.forEach((m) => { if (m.kind !== "sunk" && C.isStale(sh, myWho(), m)) old++; });
+    if (old) add("old", "? " + plural(old, "marca vieja", "marcas viejas"));
+    if (!chips.length) add("none", "Sin inversiones pendientes");
+    ui.chips.replaceChildren();
+    chips.forEach((c) => {
+      const el = document.createElement(c.extra ? "button" : "span");
+      el.className = "chip " + c.cls;
+      el.textContent = c.text;
+      if (c.extra) {
+        el.type = "button";
+        el.id = "chip-init";
+        el.setAttribute("aria-pressed", sel.initOn ? "true" : "false");
+      }
+      ui.chips.appendChild(el);
+    });
+    // elección del turno
+    const kinds = ["mover", "reconocer", "reparar", "apuntar"];
+    const states = {};
+    kinds.forEach((k) => { states[k] = manState(k); });
+    const anyOk = kinds.some((k) => states[k].ok);
+    ui.shoot.disabled = !myTurn;
+    ui.dev.disabled = !myTurn || !anyOk;
+    ui.shoot.setAttribute("aria-pressed", myTurn && sel.mode === "shoot" ? "true" : "false");
+    ui.dev.setAttribute("aria-pressed", myTurn && sel.open ? "true" : "false");
+    ui.dev.querySelector("small").textContent = anyOk ? "Rinde después" : (lvl >= 3 ? "Ya no hay" : "Tope seguido");
+    ui.shoot.querySelector("small").textContent = side.charge > 0 && sh.turnNo < side.chargeUntil ? (side.charge >= 2 ? "Área 3×3" : "En cruz") : lvl >= 3 ? "Área 3×3" : lvl >= 2 ? "En cruz" : "Daño ahora";
+    const open = myTurn && sel.open && lvl < 3;
+    const picking = myTurn && (sel.mode === "move" || sel.mode === "repair" || sel.mode === "watch");
+    document.getElementById("hud-bottom").classList.toggle("slim", picking);
+    document.getElementById("man-cancel").classList.toggle("hidden", !picking);
+    ui.manu.classList.toggle("hidden", !open);
+    ui.manu.querySelectorAll("button").forEach((b) => {
+      const k = b.dataset.man;
+      if (k === "cancel") return;
+      b.setAttribute("aria-disabled", states[k].ok ? "false" : "true");
+      b.setAttribute("aria-pressed", (sel.mode === "move" && k === "mover") || (sel.mode === "watch" && k === "reconocer") || (sel.mode === "repair" && k === "reparar") ? "true" : "false");
+      b.title = states[k].ok ? "" : states[k].why;
+    });
+    pulseOn(ui.dev, !!tuto && tuto.step === 2 && !sel.open && myTurn);
+    pulseOn(ui.shoot, !!tuto && (tuto.step === 3 || tuto.step === 1) && myTurn && !sel.open);
+    const ap = ui.manu.querySelector('[data-man="apuntar"]');
+    pulseOn(ap, !!tuto && tuto.step === 2 && open);
+  }
+
   function flushHud() {
     if (!hudDirty || !match) return;
     hudDirty = false;
@@ -406,7 +492,6 @@
     document.getElementById("tag-inv").classList.toggle("hidden", match.role !== "inv");
     const localView = viewKind() === "local";
     let label = (localView ? "Tu territorio" : "Territorio enemigo") + " · " + (C.MAPS[opts.map] ? C.MAPS[opts.map].name : "");
-    if (match.shield && localView) label += " · camuflaje";
     if (match.phase === "lobby") label = "Esperando al invasor";
     if (match.phase === "sealed") label = "Flota cerrada · " + (C.MAPS[opts.map] ? C.MAPS[opts.map].name : "");
     ui.label.textContent = label;
@@ -418,18 +503,7 @@
     ui.ready.classList.toggle("hidden", !(placing || waitingReady));
     ui.ready.disabled = waitingReady;
     ui.ready.textContent = waitingReady ? "Esperando" : "Estoy listo";
-    ui.radar.classList.toggle("hidden", !combat);
-    ui.bomb.classList.toggle("hidden", !combat);
-    ui.camo.classList.toggle("hidden", !combat);
-    const myTurn = match.phase === "attack";
-    ui.radar.disabled = !myTurn || match.powers.radar <= 0;
-    ui.bomb.disabled = !myTurn || match.powers.bomb <= 0;
-    ui.camo.disabled = !myTurn || match.powers.camo <= 0 || match.shield;
-    ui.radar.textContent = "Radar " + match.powers.radar;
-    ui.bomb.textContent = "Bomba " + match.powers.bomb;
-    ui.camo.textContent = match.shield ? "Camu ON" : "Camu " + match.powers.camo;
-    ui.radar.setAttribute("aria-pressed", armed === "radar" ? "true" : "false");
-    ui.bomb.setAttribute("aria-pressed", armed === "bomb" ? "true" : "false");
+    paintTurnbar(combat);
     ui.rotate.disabled = sealed || !hand;
   }
 
@@ -532,23 +606,6 @@
     ctx.drawImage(bdCache.canvas, 0, 0);
   }
 
-  function drawTutoHint(g, time) {
-    if (!tuto || tuto.step !== 1 || !match || match.phase !== "attack" || viewKind() !== "remote") return;
-    match.intelShip.forEach((k) => {
-      if (match.hitsOnRemote.has(k)) return;
-      const [x, y] = k.split(",").map(Number);
-      const c = cellCenter(g, x, y);
-      for (let i = 0; i < 2; i++) {
-        const ph = ((time / 1100) + i * 0.5) % 1;
-        ctx.strokeStyle = "rgba(253,224,71," + (0.9 * (1 - ph)).toFixed(3) + ")";
-        ctx.lineWidth = 3 * g.dpr;
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, g.cellW * (0.5 + ph * 1.3), 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    });
-  }
-
   function draw(time) {
     nowT = time;
     const g = gridGeom();
@@ -638,7 +695,6 @@
     ctx.strokeRect(g.padL, g.padT, gw, gh);
 
     if (match) drawPieces(g, time);
-    drawTutoHint(g, time);
     drawFx(g);
     ctx.restore();
     if (flashScreen > 0.01) {
@@ -786,21 +842,391 @@
     ctx.restore();
   }
 
+  /* ---------- capas de visión ---------- */
+  // Visión en tiempo real: zonas vigiladas y torres (celeste, vivo).
+  // Mapa explorado: marcas y fantasmas de lo último que se supo (atenuado, con "?" si pudo cambiar).
+  function zoneBox(g, z) {
+    const x0 = Math.max(0, z.x - z.r);
+    const y0 = Math.max(0, z.y - z.r);
+    const x1 = Math.min(C.W - 1, z.x + z.r);
+    const y1 = Math.min(C.H - 1, z.y + z.r);
+    const p = cellPx(g, x0, y0);
+    return { x: p.x, y: p.y, w: (x1 - x0 + 1) * g.cellW, h: (y1 - y0 + 1) * g.cellH };
+  }
+
+  function inAnyZone(zones, x, y) { return zones.some((z) => C.inZone(z, x, y)); }
+
+  function drawZone(g, z, mine, time) {
+    const b = zoneBox(g, z);
+    const col = mine ? "34,211,238" : "251,113,60";
+    const left = z.tower ? 99 : Math.max(0, Math.ceil((z.until - match.shared.turnNo) / 2));
+    const life = z.tower ? 1 : Math.max(0.25, Math.min(1, (z.until - match.shared.turnNo) / 6));
+    ctx.save();
+    ctx.fillStyle = "rgba(" + col + "," + (mine ? 0.13 : 0.08) + ")";
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    if (mine && !reduceMotion) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(b.x, b.y, b.w, b.h);
+      ctx.clip();
+      const ph = (time / 1800 + z.x * 0.13) % 1;
+      const sy = b.y + ph * b.h;
+      const lg = ctx.createLinearGradient(0, sy - b.h * 0.3, 0, sy);
+      lg.addColorStop(0, "rgba(" + col + ",0)");
+      lg.addColorStop(1, "rgba(" + col + ",.32)");
+      ctx.fillStyle = lg;
+      ctx.fillRect(b.x, sy - b.h * 0.3, b.w, b.h * 0.3);
+      ctx.restore();
+    }
+    ctx.lineWidth = Math.max(1.5, 2 * g.dpr);
+    ctx.strokeStyle = "rgba(" + col + "," + (0.5 + 0.4 * life) + ")";
+    if (!mine) ctx.setLineDash([6 * g.dpr, 4 * g.dpr]);
+    ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+    ctx.setLineDash([]);
+    const L = Math.min(g.cellW, g.cellH) * 0.42;
+    ctx.lineWidth = Math.max(2.5, 3.2 * g.dpr);
+    ctx.strokeStyle = "rgba(" + col + ",1)";
+    [[b.x, b.y, 1, 1], [b.x + b.w, b.y, -1, 1], [b.x, b.y + b.h, 1, -1], [b.x + b.w, b.y + b.h, -1, -1]].forEach((q) => {
+      ctx.beginPath();
+      ctx.moveTo(q[0] + q[2] * L, q[1]);
+      ctx.lineTo(q[0], q[1]);
+      ctx.lineTo(q[0], q[1] + q[3] * L);
+      ctx.stroke();
+    });
+    const label = z.tower ? (mine ? "TORRE" : "TORRE ENEMIGA") : (mine ? "EN VIVO · " + left : "TE VEN · " + left);
+    ctx.font = "800 " + Math.floor(Math.max(9, g.cellW * 0.26)) + "px Nunito, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.lineWidth = 3 * g.dpr;
+    ctx.strokeStyle = "rgba(2,6,23,.85)";
+    ctx.strokeText(label, b.x + 4 * g.dpr, b.y + 3 * g.dpr);
+    ctx.fillStyle = mine ? "#a5f3fc" : "#fed7aa";
+    ctx.fillText(label, b.x + 4 * g.dpr, b.y + 3 * g.dpr);
+    ctx.restore();
+  }
+
+  function pickupIcon(type, cx, cy, s, col) {
+    ctx.save();
+    ctx.fillStyle = col;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = Math.max(1.5, s * 0.16);
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    if (type === "torre") {
+      ctx.beginPath();
+      ctx.moveTo(cx - 0.42 * s, cy + 0.62 * s);
+      ctx.lineTo(cx - 0.26 * s, cy - 0.12 * s);
+      ctx.lineTo(cx + 0.26 * s, cy - 0.12 * s);
+      ctx.lineTo(cx + 0.42 * s, cy + 0.62 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(cx - 0.4 * s, cy - 0.5 * s, 0.8 * s, 0.32 * s);
+      ctx.beginPath();
+      ctx.arc(cx, cy - 0.34 * s, 0.78 * s, Math.PI * 1.15, Math.PI * 1.85);
+      ctx.stroke();
+    } else if (type === "artilleria") {
+      ctx.beginPath();
+      ctx.arc(cx, cy, 0.52 * s, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - 0.78 * s, cy); ctx.lineTo(cx - 0.24 * s, cy);
+      ctx.moveTo(cx + 0.78 * s, cy); ctx.lineTo(cx + 0.24 * s, cy);
+      ctx.moveTo(cx, cy - 0.78 * s); ctx.lineTo(cx, cy - 0.24 * s);
+      ctx.moveTo(cx, cy + 0.78 * s); ctx.lineTo(cx, cy + 0.24 * s);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy, 0.1 * s, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === "blindaje") {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 0.7 * s);
+      ctx.lineTo(cx + 0.56 * s, cy - 0.46 * s);
+      ctx.quadraticCurveTo(cx + 0.58 * s, cy + 0.36 * s, cx, cy + 0.74 * s);
+      ctx.quadraticCurveTo(cx - 0.58 * s, cy + 0.36 * s, cx - 0.56 * s, cy - 0.46 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "rgba(6,40,20,.8)";
+      ctx.lineWidth = Math.max(1, s * 0.1);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 0.46 * s); ctx.lineTo(cx, cy + 0.5 * s);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(cx + 0.14 * s, cy - 0.78 * s);
+      ctx.lineTo(cx - 0.4 * s, cy + 0.1 * s);
+      ctx.lineTo(cx - 0.04 * s, cy + 0.1 * s);
+      ctx.lineTo(cx - 0.16 * s, cy + 0.78 * s);
+      ctx.lineTo(cx + 0.4 * s, cy - 0.12 * s);
+      ctx.lineTo(cx + 0.04 * s, cy - 0.12 * s);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawPickup(g, p, time) {
+    const c = cellCenter(g, p.x, p.y);
+    const r = Math.min(g.cellW, g.cellH) * 0.4;
+    const col = PK_COLOR[p.type] || "#fff";
+    const pul = reduceMotion ? 0.5 : 0.5 + 0.5 * Math.sin(time / 420 + p.id);
+    ctx.save();
+    const gr = ctx.createRadialGradient(c.x, c.y, r * 0.3, c.x, c.y, r * (1.9 + pul * 0.5));
+    gr.addColorStop(0, col + "aa");
+    gr.addColorStop(1, col + "00");
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = gr;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r * (1.9 + pul * 0.5), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.fillStyle = "rgba(8,14,30,.86)";
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = Math.max(2, 2.4 * g.dpr);
+    ctx.stroke();
+    if (p.type === "torre" && p.owner) {
+      ctx.strokeStyle = p.owner === match.role ? "#22d3ee" : "#fb923c";
+      ctx.lineWidth = Math.max(2.5, 3 * g.dpr);
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, r + 3 * g.dpr, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    pickupIcon(p.type, c.x, c.y, r * 0.72, col);
+    ctx.restore();
+  }
+
+  function drawContact(g, x, y, kind, live, time, stale) {
+    const c = cellCenter(g, x, y);
+    const r = Math.min(g.cellW, g.cellH) * 0.34;
+    ctx.save();
+    if (live) {
+      const pul = reduceMotion ? 0.6 : 0.5 + 0.5 * Math.sin(time / 260 + x * 1.7 + y);
+      const gr = ctx.createRadialGradient(c.x, c.y, r * 0.2, c.x, c.y, r * 2.1);
+      gr.addColorStop(0, "rgba(125,240,255,.75)");
+      gr.addColorStop(1, "rgba(34,211,238,0)");
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = gr;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, r * (1.7 + pul * 0.5), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = "rgba(8,47,73,.78)";
+      ctx.strokeStyle = "#a5f3fc";
+      ctx.lineWidth = Math.max(2, 2.4 * g.dpr);
+    } else {
+      ctx.fillStyle = "rgba(30,41,59,.28)";
+      ctx.strokeStyle = "rgba(253,230,138,.7)";
+      ctx.lineWidth = Math.max(1.5, 1.8 * g.dpr);
+      ctx.setLineDash([4 * g.dpr, 3 * g.dpr]);
+    }
+    ctx.beginPath();
+    if (kind === "tanque") ctx.rect(c.x - r, c.y - r * 0.8, r * 2, r * 1.6);
+    else { ctx.moveTo(c.x, c.y - r); ctx.lineTo(c.x + r, c.y); ctx.lineTo(c.x, c.y + r); ctx.lineTo(c.x - r, c.y); ctx.closePath(); }
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (!live) {
+      ctx.font = "800 " + Math.floor(Math.max(10, g.cellW * 0.34)) + "px Nunito, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(253,230,138,.95)";
+      ctx.fillText("?", c.x, c.y + 1);
+    }
+    ctx.restore();
+  }
+
+  // Marca del mapa explorado. Si ya pudo cambiar (el rival movió o reparó) se ve vieja: sin llamas y con "?".
+  function drawOldMark(g, x, y, kind) {
+    const p = cellPx(g, x, y);
+    const cx = p.x + g.cellW / 2;
+    const cy = p.y + g.cellH / 2;
+    const rad = Math.min(g.cellW, g.cellH) * 0.26;
+    ctx.save();
+    ctx.setLineDash([5 * g.dpr, 3 * g.dpr]);
+    ctx.lineWidth = Math.max(1.5, 1.6 * g.dpr);
+    if (kind === "hit") {
+      ctx.fillStyle = "rgba(120,53,15,.28)";
+      ctx.fillRect(p.x + 2, p.y + 2, g.cellW - 4, g.cellH - 4);
+      ctx.strokeStyle = "rgba(251,191,36,.85)";
+      ctx.strokeRect(p.x + 2, p.y + 2, g.cellW - 4, g.cellH - 4);
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "rgba(255,241,242,.55)";
+      ctx.beginPath();
+      ctx.moveTo(cx - rad, cy - rad); ctx.lineTo(cx + rad, cy + rad);
+      ctx.moveTo(cx + rad, cy - rad); ctx.lineTo(cx - rad, cy + rad);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = "rgba(226,232,240,.45)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad * 0.8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.font = "800 " + Math.floor(Math.max(9, g.cellW * 0.3)) + "px Nunito, sans-serif";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "rgba(253,230,138,.95)";
+    ctx.fillText("?", p.x + g.cellW - 3 * g.dpr, p.y + 2 * g.dpr);
+    ctx.restore();
+  }
+
+  function dirHandle(u, o) {
+    const sz = u.size;
+    if (u.horizontal) {
+      if (o.dx) return { x: o.dx > 0 ? o.x + sz - 1 : o.x, y: o.y };
+      return { x: o.x + Math.floor(sz / 2), y: o.y };
+    }
+    if (o.dy) return { x: o.x, y: o.dy > 0 ? o.y + sz - 1 : o.y };
+    return { x: o.x, y: o.y + Math.floor(sz / 2) };
+  }
+
+  function moveHandles() {
+    if (!match || sel.unit == null) return [];
+    const u = match.local.find((s) => s.id === sel.unit);
+    if (!u) return [];
+    return C.moveOptions(match.side, match.shared, u, myWho()).map((o) => Object.assign({ h: dirHandle(u, o) }, o));
+  }
+
+  function drawChevron(g, h, o, time, chosen) {
+    const c = cellCenter(g, h.x, h.y);
+    const r = Math.min(g.cellW, g.cellH) * 0.36;
+    const gold = o.collect.length > 0;
+    const col = gold ? "#fde047" : "#86efac";
+    const pul = reduceMotion ? 0.5 : 0.5 + 0.5 * Math.sin(time / 300 + h.x + h.y);
+    ctx.save();
+    ctx.fillStyle = chosen ? "rgba(34,197,94,.9)" : "rgba(8,14,30,.72)";
+    ctx.strokeStyle = col;
+    ctx.lineWidth = Math.max(2, 2.6 * g.dpr) * (chosen ? 1.3 : 1);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r * (1 + pul * 0.08), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    const a = Math.atan2(o.dy, o.dx);
+    ctx.translate(c.x, c.y);
+    ctx.rotate(a);
+    ctx.fillStyle = chosen ? "#052e16" : col;
+    ctx.beginPath();
+    ctx.moveTo(r * 0.5, 0);
+    ctx.lineTo(-r * 0.2, -r * 0.42);
+    ctx.lineTo(-r * 0.2, r * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    if (Math.abs(o.dx) + Math.abs(o.dy) > 1) {
+      ctx.save();
+      ctx.font = "800 " + Math.floor(Math.max(9, g.cellW * 0.24)) + "px Nunito, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = col;
+      ctx.fillText("2", c.x, c.y + r * 0.9);
+      ctx.restore();
+    }
+  }
+
   function drawPieces(g, time) {
     const local = viewKind() === "local";
+    const sh = match.shared;
+    const combat = !!sh && (match.phase === "attack" || match.phase === "defend" || match.phase === "resolving" || match.phase === "end");
     if (local && match.local) {
+      const foeZones = combat ? C.zonesOf(sh, foeWho()) : [];
       match.local.forEach((s) => {
         if (s.lifted) return;
         const sunk = C.shipStatus(s, match.hitsOnLocal).sunk;
         drawHull(g, s, 1, sunk ? "#6b7280" : undefined);
+        if (!sunk && s.armor > 0) {
+          const mid = C.cellsOf(s)[Math.floor(s.size / 2)];
+          const c = cellCenter(g, mid.x, mid.y);
+          const rr = Math.min(g.cellW, g.cellH) * 0.22;
+          ctx.save();
+          ctx.strokeStyle = "#4ade80";
+          ctx.fillStyle = "rgba(6,78,59,.7)";
+          ctx.lineWidth = Math.max(1.5, 2 * g.dpr);
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, rr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.font = "800 " + Math.floor(rr * 1.3) + "px Nunito, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "#bbf7d0";
+          ctx.fillText(String(s.armor), c.x, c.y + 1);
+          ctx.restore();
+        }
         C.cellsOf(s).forEach((c) => {
           if (match.hitsOnLocal.has(C.key(c.x, c.y))) drawMark(g, c.x, c.y, sunk ? "sunk" : "hit");
+          if (!sunk && foeZones.length && inAnyZone(foeZones, c.x, c.y)) {
+            const p = cellPx(g, c.x, c.y);
+            const pul = reduceMotion ? 0.6 : 0.5 + 0.5 * Math.sin(time / 320);
+            ctx.strokeStyle = "rgba(251,113,60," + (0.55 + 0.4 * pul).toFixed(2) + ")";
+            ctx.lineWidth = Math.max(2, 2.4 * g.dpr);
+            ctx.strokeRect(p.x + 2, p.y + 2, g.cellW - 4, g.cellH - 4);
+          }
         });
       });
-      match.hitsOnLocal.forEach((k) => {
+      match.side.misses.forEach((k) => {
         const [x, y] = k.split(",").map(Number);
         if (!C.shipAt(match.local, x, y)) drawMark(g, x, y, "miss");
       });
+      if (combat) {
+        foeZones.forEach((z) => drawZone(g, z, false, time));
+        sh.pickups.forEach((p) => drawPickup(g, p, time));
+      }
+      if (combat && match.phase === "attack" && (sel.mode === "move" || sel.mode === "repair")) {
+        const t = time / 1000;
+        if (sel.mode === "repair") {
+          C.repairable(match.side).forEach((s) => {
+            const mid = C.cellsOf(s)[0];
+            const c = cellCenter(g, mid.x, mid.y);
+            const r = Math.min(g.cellW, g.cellH) * (0.46 + 0.06 * Math.sin(t * 5));
+            ctx.save();
+            ctx.strokeStyle = "#4ade80";
+            ctx.lineWidth = Math.max(2.5, 3 * g.dpr);
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = "#4ade80";
+            ctx.fillRect(c.x - r * 0.18, c.y - r * 0.5, r * 0.36, r);
+            ctx.fillRect(c.x - r * 0.5, c.y - r * 0.18, r, r * 0.36);
+            ctx.restore();
+          });
+        } else if (sel.unit == null) {
+          match.local.forEach((s) => {
+            if (!C.moveOptions(match.side, sh, s, myWho()).length) return;
+            const cs = C.cellsOf(s);
+            const p0 = cellPx(g, s.x, s.y);
+            const w = (s.horizontal ? s.size : 1) * g.cellW;
+            const h = (s.horizontal ? 1 : s.size) * g.cellH;
+            ctx.save();
+            ctx.strokeStyle = "rgba(134,239,172," + (0.6 + 0.3 * Math.sin(t * 5)).toFixed(2) + ")";
+            ctx.lineWidth = Math.max(2, 2.6 * g.dpr);
+            ctx.strokeRect(p0.x + 1, p0.y + 1, w - 2, h - 2);
+            ctx.restore();
+            if (!cs.length) return;
+          });
+        } else {
+          const u = match.local.find((s) => s.id === sel.unit);
+          if (u) {
+            const p0 = cellPx(g, u.x, u.y);
+            ctx.save();
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = Math.max(2.5, 3 * g.dpr);
+            ctx.strokeRect(p0.x + 1, p0.y + 1, (u.horizontal ? u.size : 1) * g.cellW - 2, (u.horizontal ? 1 : u.size) * g.cellH - 2);
+            ctx.restore();
+            const hs = moveHandles();
+            hs.forEach((o) => {
+              const chosen = sel.dest && sel.dest.dx === o.dx && sel.dest.dy === o.dy;
+              if (chosen) drawHull(g, { x: o.x, y: o.y, size: u.size, horizontal: u.horizontal, kind: u.kind, color: u.color }, 0.88, "#4ade80");
+            });
+            hs.forEach((o) => {
+              const chosen = sel.dest && sel.dest.dx === o.dx && sel.dest.dy === o.dy;
+              drawChevron(g, o.h, o, time, chosen);
+            });
+          }
+        }
+      }
       if (hand && preview) {
         const ghost = {
           x: preview.x,
@@ -837,7 +1263,6 @@
         const mid = cellPx(g, unit.x + (horizontal ? unit.size / 2 - 0.5 : 0), unit.y + (horizontal ? 0 : unit.size / 2 - 0.5));
         const mx = mid.x + g.cellW / 2;
         const my = mid.y + g.cellH / 2;
-        // oil slick under the wreck, growing slowly
         ctx.save();
         ctx.fillStyle = "rgba(8,10,16,.34)";
         ctx.beginPath();
@@ -859,32 +1284,49 @@
         }
         ctx.restore();
       });
-      match.intelShip.forEach((k) => {
-        if (match.remoteMarks.get(k)) return;
-        const [x, y] = k.split(",").map(Number);
-        const p = cellPx(g, x, y);
-        ctx.fillStyle = "rgba(250,204,21,.9)";
-        ctx.fillRect(p.x + 2, p.y + 2, g.cellW - 4, g.cellH - 4);
-        ctx.strokeStyle = "#facc15";
-        ctx.lineWidth = Math.max(2, 2.5 * g.dpr);
-        ctx.strokeRect(p.x + 2, p.y + 2, g.cellW - 4, g.cellH - 4);
-      });
-      match.intelEmpty.forEach((k) => {
-        if (match.remoteMarks.get(k)) return;
-        const [x, y] = k.split(",").map(Number);
-        drawMark(g, x, y, "ping");
-      });
-      match.remoteMarks.forEach((kind, k) => {
-        const [x, y] = k.split(",").map(Number);
-        drawMark(g, x, y, kind);
-      });
-      if (match.phase === "attack" && preview && C.inBounds(preview.x, preview.y)) {
-        const cells = armed === "radar" ? C.area(preview.x, preview.y) : armed === "bomb" ? C.cross(preview.x, preview.y) : [preview];
-        ctx.fillStyle = armed === "radar" ? "rgba(250,204,21,.38)" : armed === "bomb" ? "rgba(248,113,113,.42)" : "rgba(255,255,255,.18)";
-        cells.forEach((c) => {
-          const p = cellPx(g, c.x, c.y);
-          ctx.fillRect(p.x + 1, p.y + 1, g.cellW - 2, g.cellH - 2);
+      if (combat) {
+        const know = match.know;
+        const mine = C.zonesOf(sh, myWho());
+        // mapa explorado: lo último que supe, atenuado
+        know.marks.forEach((m, k) => {
+          const [x, y] = k.split(",").map(Number);
+          if (m.kind === "sunk") { drawMark(g, x, y, "sunk"); return; }
+          const inLive = inAnyZone(mine, x, y);
+          const stale = C.isStale(sh, myWho(), m) || (m.kind === "hit" && inLive && !know.live.has(k));
+          if (stale) drawOldMark(g, x, y, m.kind);
+          else drawMark(g, x, y, m.kind);
         });
+        know.ghosts.forEach((gh, k) => {
+          const [x, y] = k.split(",").map(Number);
+          if (inAnyZone(mine, x, y)) return;
+          drawContact(g, x, y, gh.kind, false, time, true);
+        });
+        // visión en tiempo real
+        mine.forEach((z) => drawZone(g, z, true, time));
+        sh.pickups.forEach((p) => drawPickup(g, p, time));
+        know.live.forEach((kind, k) => {
+          const [x, y] = k.split(",").map(Number);
+          drawContact(g, x, y, kind, true, time, false);
+        });
+        if (match.phase === "attack" && preview && C.inBounds(preview.x, preview.y)) {
+          if (sel.mode === "watch") {
+            const z = { x: preview.x, y: preview.y, r: 1 };
+            const b = zoneBox(g, z);
+            ctx.fillStyle = "rgba(34,211,238,.28)";
+            ctx.fillRect(b.x, b.y, b.w, b.h);
+            ctx.strokeStyle = "#22d3ee";
+            ctx.lineWidth = Math.max(2, 2.4 * g.dpr);
+            ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+          } else if (sel.mode === "shoot") {
+            const pat = C.shotCells(match.side, sh, preview);
+            ctx.fillStyle = pat.level >= 2 ? "rgba(248,113,113,.42)" : pat.level === 1 ? "rgba(251,146,60,.4)" : "rgba(255,255,255,.2)";
+            pat.cells.forEach((c) => {
+              if (!C.inBounds(c.x, c.y)) return;
+              const p = cellPx(g, c.x, c.y);
+              ctx.fillRect(p.x + 1, p.y + 1, g.cellW - 2, g.cellH - 2);
+            });
+          }
+        }
       }
     }
     flashes.forEach((f) => {
@@ -1221,44 +1663,69 @@
     }
   }
 
-  function narrate(results, incoming) {
+  function narrate(results, incoming, pattern) {
     if (!results.length) return "Nada que disparar.";
-    if (results.every((r) => r.kind === "repeat")) return "Esa zona ya está marcada.";
-    if (results.some((r) => r.kind === "shield")) {
-      return incoming ? "Tu camuflaje desvió el ataque. No quedó marca." : "El camuflaje enemigo desvió el disparo.";
+    const multi = results.length > 1;
+    const sunk = results.filter((r) => r.kind === "sunk");
+    const fresh = results.filter((r) => r.kind === "hit" && !r.again);
+    const again = results.filter((r) => r.kind === "hit" && r.again);
+    const blocked = results.some((r) => r.blocked);
+    const wreck = results.filter((r) => r.kind === "wreck");
+    const area = pattern && (pattern.level >= 2 || (pattern.level == null && pattern.cells && pattern.cells.length > 5));
+    const pat = multi ? (area ? "Área 3×3: " : "Cruz: ") : "";
+    if (sunk.length) return pat + (incoming ? "Te destruyeron " : "Destruiste ") + sunk[0].ship + (fresh.length ? " y hubo más impactos." : ".");
+    if (fresh.length) {
+      const h = fresh[0];
+      const n = fresh.length;
+      if (n > 1) return pat + n + " impactos" + (incoming ? " en tu flota." : " confirmados.");
+      return pat + (incoming ? "Impacto en tu " : "Impacto en ") + h.ship + ". Quedan " + h.left + ".";
     }
-    const sunk = results.find((r) => r.kind === "sunk");
-    if (sunk) return (incoming ? "Te destruyeron " : "Destruiste ") + sunk.ship + ".";
-    const hit = results.find((r) => r.kind === "hit");
-    if (hit) {
+    if (again.length) {
       return incoming
-        ? "Impacto en tu " + hit.ship + ". Quedan " + hit.left + "."
-        : "Impacto en " + hit.ship + ". Quedan " + hit.left + ".";
+        ? "Otro golpe a un segmento ya dañado de tu " + again[0].ship + "."
+        : "Ahí sigue " + again[0].ship + ": ese segmento ya estaba tocado.";
     }
-    return incoming ? "El disparo cayó al vacío." : "Agua. Ahora te pueden atacar.";
+    if (blocked && incoming) return "Tu blindaje absorbió el impacto.";
+    if (wreck.length && !incoming) return "Ahí solo queda un naufragio.";
+    return pat + (incoming ? "El disparo cayó al vacío." : "Agua. Si él se movió, tus marcas viejas ya no valen.");
   }
 
-  async function playResults(results, incoming) {
+  function fxAgain(x, y, text) {
+    const g = gridGeom();
+    const c = cellCenter(g, x, y);
+    rings.push({ x, y, life: 1, color: "#fde68a", size: 1.6, w: 3 });
+    floats.push({ x: c.x, y: c.y, vy: -30 * g.dpr, life: 1, color: "#fde68a", text, size: 12 });
+  }
+
+  async function playResults(results, incoming, pattern) {
     viewOverride = incoming ? "local" : "remote";
     hudDirty = true;
     if (incoming) ui.stage.classList.add("under-fire");
     let sunkAny = false;
     const j = juke();
     const stt = match && match.stats;
-    if (stt && !incoming) stt.turns++;
+    if (pattern && pattern.cells && pattern.cells.length > 1) {
+      const col = (pattern.level >= 2 || pattern.cells.length > 5) ? "#f87171" : "#fb923c";
+      const mx = pattern.cells.reduce((a, c) => a + c.x, 0) / pattern.cells.length;
+      const my = pattern.cells.reduce((a, c) => a + c.y, 0) / pattern.cells.length;
+      burst(Math.round(mx), Math.round(my), col);
+    }
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       if (stt) {
         if (incoming) {
-          if (r.kind === "hit" || r.kind === "sunk") stt.taken++;
+          if ((r.kind === "hit" && !r.again) || r.kind === "sunk") stt.taken++;
           if (r.kind === "sunk") stt.lost++;
         } else {
-          if (r.kind === "hit" || r.kind === "sunk") { stt.shots++; stt.hits++; }
+          if (r.kind === "hit" || r.kind === "sunk") { stt.shots++; if (!r.again) stt.hits++; }
           else if (r.kind === "miss") { stt.shots++; stt.misses++; }
           if (r.kind === "sunk") stt.sunk++;
         }
       }
-      if (r.kind === "hit" || r.kind === "sunk") {
+      if (r.kind === "hit" && r.again) {
+        fxAgain(r.x, r.y, incoming ? "OTRA VEZ" : "SIGUE AHÍ");
+        if (j) j.sfx.hit();
+      } else if (r.kind === "hit" || r.kind === "sunk") {
         fxHit(r.x, r.y, incoming);
         if (j) j.sfx.hit();
         if (r.kind === "sunk") {
@@ -1266,16 +1733,18 @@
           fxSunk(r, incoming);
           if (j) j.sfx.sunk();
         }
+      } else if (r.kind === "wreck") {
+        fxAgain(r.x, r.y, "NAUFRAGIO");
+      } else if (r.kind === "miss" && r.blocked && incoming) {
+        burst(r.x, r.y, "#facc15");
+        if (j) j.sfx.shield();
       } else if (r.kind === "miss") {
         fxMiss(r.x, r.y);
         if (j) j.sfx.miss();
-      } else if (r.kind === "shield") {
-        burst(r.x, r.y, "#facc15");
-        if (j) j.sfx.shield();
       }
       if (i < results.length - 1) await WAIT(incoming ? 200 : 120);
     }
-    say(narrate(results, incoming));
+    say(narrate(results, incoming, pattern));
     hudDirty = true;
     await WAIT((incoming ? 880 : 520) + (sunkAny ? 750 : 0));
     ui.stage.classList.remove("under-fire");
@@ -1297,20 +1766,33 @@
       phase: "wait",
       local,
       remote,
-      hitsOnLocal: new Set(),
+      hitsOnLocal: null,
       hitsOnRemote: new Set(),
-      remoteMarks: new Map(),
       wrecks: [],
-      intelShip: new Set(),
-      intelEmpty: new Set(),
-      powers: { radar: 2, bomb: 1, camo: 1 },
-      shield: false,
-      stats: { shots: 0, hits: 0, misses: 0, sunk: 0, taken: 0, lost: 0, turns: 0, radar: 0, bomb: 0, camo: 0, t0: 0, t1: 0 }
+      side: null,
+      foeSide: null,
+      know: C.newKnow(),
+      meP: null,
+      shared: null,
+      world: null,
+      lastLevel: 0,
+      keepNext: false,
+      shotT: 0,
+      pattern: null,
+      stats: { shots: 0, hits: 0, misses: 0, sunk: 0, taken: 0, lost: 0, turns: 0, man: 0, picks: 0, t0: 0, t1: 0 }
     };
+    match.side = C.newSide(local);
+    match.hitsOnLocal = match.side.hits;
+    match.meP = { side: match.side, know: match.know, pers: null, consec: 0 };
+    if (remote) {
+      match.foeSide = C.newSide(remote);
+      match.hitsOnRemote = match.foeSide.hits;
+    }
+    sel.initOn = false;
+    selReset("shoot");
     rematch = { me: false, them: false };
     remoteLeft = 17;
     hand = null;
-    armed = null;
     preview = null;
     localReady = false;
     remoteReady = opts.mode !== "pvp";
@@ -1400,18 +1882,31 @@
     settleHand();
     stopClock();
     hudDirty = true;
+    const seed = opts.mode === "pvp" ? ((opts.seed >>> 0) || 1) : Math.floor(Math.random() * 4294967296);
+    match.shared = C.newShared(seed, opts.terrain, opts.map, opts.crop);
+    match.lastLevel = 0;
     if (opts.mode !== "pvp") {
+      const pers = C.PERSONALITIES[Math.floor(Math.random() * C.PERSONALITIES.length)];
+      match.aiPers = pers;
+      match.world = {
+        shared: match.shared,
+        p: { arg: match.meP, inv: { side: match.foeSide, know: C.newKnow(), pers, consec: 0 } }
+      };
+      const nation = C.NATIONS[opts.nation];
+      document.getElementById("inv-name").textContent = nation.flag + " " + nation.name.toUpperCase() + " · " + C.PERS_LABEL[pers];
       match.phase = "attack";
       tutoEvent("ready");
-      say("El enemigo está escondido. Tu turno: tocá una celda enemiga.");
+      say("Invasor " + C.PERS_LABEL[pers].toLowerCase() + ": " + PERS_BLURB[pers] + ". Tu turno: disparás o maniobrás.");
       requestAnimationFrame(fit);
+      hudDirty = true;
       return;
     }
     match.phase = match.role === "arg" ? "attack" : "defend";
     say(match.role === "arg"
-      ? "Nadie sabe dónde está nadie. Empezás vos: tocá el territorio enemigo."
-      : "Argentina dispara primero. Si te pegan, lo vas a ver en tu parque.");
+      ? "Nadie sabe dónde está nadie. Empezás vos: disparás o maniobrás."
+      : "Argentina juega primero. Mirá tu parque: ahí vas a ver qué hace.");
     requestAnimationFrame(fit);
+    hudDirty = true;
   }
 
   function markReady() {
@@ -1542,9 +2037,42 @@
     }
     if (match.phase !== "attack" || busy) return;
     if (!cell) return;
+    if (!C.inBounds(cell.x, cell.y)) return;
     preview = cell;
-    if (armed === "radar") lock(() => doRadar(cell));
-    else lock(() => doShot(cell));
+    lock(() => cellAction(cell));
+  }
+
+  async function cellAction(cell) {
+    if (!match || match.phase !== "attack") return;
+    if (sel.mode === "shoot") return takeAction({ t: "shot", cell: { x: cell.x, y: cell.y } });
+    if (sel.mode === "watch") return takeAction({ t: "watch", x: cell.x, y: cell.y });
+    if (sel.mode === "menu") { say("Elegí una maniobra: Mover, Vigilar, Reparar o Apuntar."); return; }
+    if (sel.mode === "repair") {
+      const u = C.shipAt(match.local, cell.x, cell.y);
+      if (u && C.repairable(match.side).includes(u)) return takeAction({ t: "repair", unit: u.id });
+      say("Tocá una unidad tuya con daño (marcada en verde).");
+      return;
+    }
+    if (sel.mode === "move") {
+      if (sel.unit != null) {
+        const o = moveHandles().find((q) => q.h.x === cell.x && q.h.y === cell.y);
+        if (o) {
+          if (sel.dest && sel.dest.dx === o.dx && sel.dest.dy === o.dy) return takeAction({ t: "move", unit: sel.unit, dx: o.dx, dy: o.dy });
+          sel.dest = { dx: o.dx, dy: o.dy };
+          hudDirty = true;
+          say(o.collect.length ? "Ahí hay un tesoro. Tocá la flecha otra vez para confirmar el movimiento." : "Tocá la misma flecha otra vez para confirmar el movimiento.");
+          return;
+        }
+      }
+      const u = C.shipAt(match.local, cell.x, cell.y);
+      if (u && C.moveOptions(match.side, match.shared, u, myWho()).length) {
+        sel.unit = u.id;
+        sel.dest = null;
+        hudDirty = true;
+        say("Elegí hacia dónde: las flechas doradas llevan a un tesoro. Tocá una para ver el destino y otra vez para confirmar.");
+      } else if (u) say("Esa unidad no tiene lugar para moverse.");
+      else say("Tocá una unidad tuya para moverla.");
+    }
   }
 
   function onPointerMove(e) {
@@ -1573,144 +2101,336 @@
     if ((gestureHeld || moved) && preview) tryDrop(preview);
   }
 
-  async function doRadar(cell) {
-    if (!match || match.phase !== "attack" || match.powers.radar <= 0) return;
-    const zone = C.area(cell.x, cell.y);
-    const known = (c) => {
-      const k = C.key(c.x, c.y);
-      return match.remoteMarks.has(k) || match.intelShip.has(k) || match.intelEmpty.has(k);
-    };
-    if (zone.every(known)) {
-      say("Esa zona ya la viste. Elegí otro centro.");
-      return;
-    }
-    match.powers.radar--;
-    match.stats.radar++;
-    armed = null;
+  /* ================= DISPARAR O DESARROLLAR ================= */
+  // Cada turno: o disparás (daño ahora) o hacés UNA maniobra (sin daño, rinde después).
+  const LEVEL_RULE = [
+    "Hay tiempo de desarrollarse: hasta dos maniobras seguidas.",
+    "Una sola maniobra seguida. Las vigilancias duran menos.",
+    "Solo se puede mover. Todos los disparos caen en cruz.",
+    "Ya no hay maniobras. Todos los disparos caen en área 3×3."
+  ];
+  const PERS_BLURB = {
+    agresivo: "casi siempre dispara",
+    cauto: "se desarrolla y repara antes de arriesgar",
+    oportunista: "caza tesoros y espera su momento"
+  };
+
+  function selReset(mode) {
+    sel.mode = mode || "shoot";
+    sel.unit = null;
+    sel.dest = null;
+    sel.open = sel.mode !== "shoot";
     hudDirty = true;
-    if (opts.mode === "pvc") {
-      let n = 0;
-      zone.forEach((c) => {
-        const k = C.key(c.x, c.y);
-        if (C.shipAt(match.remote, c.x, c.y)) { match.intelShip.add(k); n++; }
-        else match.intelEmpty.add(k);
-      });
-      burst(cell.x, cell.y, "#facc15");
-      tutoEvent("radar");
-      const j = juke();
-      if (j) j.sfx.shield();
-      say(n ? "Radar: " + n + " contacto" + (n === 1 ? "" : "s") + " en el área. Seguís de turno." : "Radar limpio. Seguís de turno.");
-      hudDirty = true;
-      return;
+  }
+  function myWho() { return match.role; }
+  function foeWho() { return C.other(match.role); }
+
+  function manState(kind) {
+    const me = match.meP;
+    const sh = match.shared;
+    const gate = C.maneuverAllowed(kind, sh, me.consec);
+    if (!gate.ok) return gate;
+    if (kind === "mover" && !match.local.some((s) => C.moveOptions(match.side, sh, s, myWho()).length)) {
+      return { ok: false, why: "Ninguna unidad tiene lugar para moverse." };
     }
-    say("Ping de radar…");
-    send({ t: "ping", x: cell.x, y: cell.y });
+    if (kind === "reparar" && !C.repairable(match.side).length) return { ok: false, why: "No tenés unidades dañadas para reparar." };
+    if (kind === "apuntar" && match.side.charge >= 2) return { ok: false, why: "La carga ya está al máximo (área 3×3)." };
+    return { ok: true, why: "" };
   }
 
-  async function doShot(cell) {
-    if (!match || match.phase !== "attack") return;
-    const bomb = armed === "bomb";
-    if (bomb && match.powers.bomb <= 0) return;
-    const shots = (bomb ? C.cross(cell.x, cell.y) : [{ x: cell.x, y: cell.y }]).filter((c) => {
-      const k = C.key(c.x, c.y);
-      if (opts.mode === "pvc") return !match.hitsOnRemote.has(k);
-      const mark = match.remoteMarks.get(k);
-      return mark !== "hit" && mark !== "miss" && mark !== "sunk";
-    });
-    if (!shots.length) {
-      say("Esa zona ya está marcada.");
-      return;
+  function turnHint() {
+    const lvl = C.warLevel(match.shared);
+    if (lvl >= 3) return "Bombardeo: solo disparos, en área 3×3.";
+    return "Disparar da daño ahora. Maniobrar no hace daño, pero rinde después.";
+  }
+
+  function mySpot() { return C.spottedCells(match.side, C.zonesOf(match.shared, foeWho())); }
+
+  function myTurnStart(prefix) {
+    if (!match) return;
+    match.phase = "attack";
+    C.expireSide(match.side, match.shared);
+    selReset("shoot");
+    const lvl = C.warLevel(match.shared);
+    if (lvl !== match.lastLevel) {
+      match.lastLevel = lvl;
+      if (lvl > 0) showBanner(C.WAR_NAMES[lvl].toUpperCase(), LEVEL_RULE[lvl], lvl >= 2 ? "bad" : "good");
     }
-    if (bomb) { match.powers.bomb--; match.stats.bomb++; }
-    armed = null;
-    tutoEvent("shot");
+    say((prefix ? prefix + " " : "") + turnHint());
+    hudDirty = true;
+  }
+
+  async function takeAction(act) {
+    if (!match || match.phase !== "attack") return;
+    const m = match;
+    const me = match.meP;
+    const sh = match.shared;
+    const who = myWho();
+    C.expireSide(match.side, sh);
+    const keep = sel.initOn && match.side.init > 0 && sh.turnNo < match.side.initUntil;
+    if (keep) match.side.init = 0;
+    sel.initOn = false;
+    selReset("shoot");
     match.phase = "resolving";
     hudDirty = true;
+    match.stats.turns++;
     if (opts.mode === "pvc") {
-      const res = C.resolveShots(match.remote, match.hitsOnRemote, shots, false);
-      const m = match;
-      rememberRemote(res.results);
-      await playResults(res.results, false);
+      const out = C.execAction(match.world, who, act);
+      await presentMine(out, act);
       if (match !== m) return;
-      if (res.lost) return finish(true);
-      await enemyStrike();
+      if (out.lost) return finish(true);
+      if (keep) { myTurnStart("Iniciativa: seguís de turno."); return; }
+      await enemyTurn();
       return;
     }
-    say("Disparo en camino…");
-    send({ t: "fire", shots });
+    // PvP: cada cliente aplica lo suyo y le avisa al otro lo que es público.
+    let msg;
+    let pub = [];
+    const unit = act.unit != null ? match.side.fleet.find((s) => s.id === act.unit) : null;
+    if (act.t === "shot") {
+      const pat = C.shotCells(match.side, sh, act.cell);
+      if (pat.charged) match.side.charge = 0;
+      match.shotT = sh.turnNo;
+      me.consec = 0;
+      C.advance(sh, who, "shot");
+      msg = { t: "fire", shots: pat.cells, keep, spot: mySpot() };
+      match.pattern = pat;
+    } else {
+      if (act.t === "move") {
+        C.translateUnit(match.side, unit, act.dx, act.dy);
+        pub = C.collectUnder(match.side, sh, who, unit);
+        C.advance(sh, who, "move");
+        msg = { t: "man", k: "move", collect: pub, keep };
+      } else if (act.t === "repair") {
+        C.applyRepair(match.side, unit);
+        C.advance(sh, who, "repair");
+        msg = { t: "man", k: "repair", keep };
+      } else if (act.t === "aim") {
+        C.applyAim(match.side, sh);
+        C.advance(sh, who, "aim");
+        msg = { t: "man", k: "aim", keep };
+      } else {
+        C.addWatch(sh, who, act.x, act.y);
+        C.advance(sh, who, "watch");
+        msg = { t: "man", k: "watch", x: act.x, y: act.y, keep };
+      }
+      me.consec++;
+      msg.spot = mySpot();
+    }
+    match.keepNext = keep;
+    send(msg);
+    if (act.t === "shot") {
+      say("Disparo en camino…");
+      return;
+    }
+    match.stats.man++;
+    tutoEvent("man");
+    await playManeuver(true, act.t, pub, act);
+    if (match !== m) return;
+    hudDirty = true;
+  }
+
+  async function handleManAck(msg) {
+    if (!match || match.phase !== "resolving") return;
+    C.noteSpot(match.know, sanitizeSpot(msg.spot), match.shared.turnNo);
+    if (match.keepNext) myTurnStart("Iniciativa: seguís de turno.");
+    else { match.phase = "defend"; hudDirty = true; say("Esperando la jugada del rival…"); }
+  }
+
+  function sanitizeSpot(list) {
+    return (Array.isArray(list) ? list : []).filter((c) => c && C.inBounds(c.x | 0, c.y | 0)).slice(0, 40)
+      .map((c) => ({ x: c.x | 0, y: c.y | 0, kind: c.kind === "tanque" ? "tanque" : "barco" }));
+  }
+
+  async function handleFire(msg) {
+    if (!match || !match.shared) return;
+    const m = match;
+    const sh = match.shared;
+    match.phase = "defend";
+    hudDirty = true;
+    const cells = (Array.isArray(msg.shots) ? msg.shots : []).filter((c) => c && C.inBounds(c.x | 0, c.y | 0)).slice(0, 9).map((c) => ({ x: c.x | 0, y: c.y | 0 }));
+    const res = C.resolveVolley(match.side, cells);
+    C.advance(sh, foeWho(), "shot");
+    C.noteSpot(match.know, sanitizeSpot(msg.spot), sh.turnNo);
+    await playResults(res.results, true, { cells });
+    if (match !== m) return;
+    const wire = res.results.map((r) => (r.blocked ? { x: r.x, y: r.y, kind: "miss" } : r));
+    send({ t: "resolved", results: wire, hpLeft: res.hp.left, lost: res.lost, spot: mySpot() });
+    if (res.lost) return finish(false);
+    if (msg.keep) { match.phase = "defend"; hudDirty = true; say("El rival tiene Iniciativa: juega de nuevo."); return; }
+    myTurnStart("Tu turno.");
+  }
+
+  async function handleResolved(msg) {
+    if (!match || !match.shared) return;
+    const m = match;
+    const sh = match.shared;
+    const results = Array.isArray(msg.results) ? msg.results : [];
+    remoteLeft = typeof msg.hpLeft === "number" ? msg.hpLeft : remoteLeft;
+    C.noteResults(match.know, results, typeof match.shotT === "number" ? match.shotT : sh.turnNo);
+    C.noteSpot(match.know, sanitizeSpot(msg.spot), sh.turnNo);
+    rememberRemote(results);
+    tutoEvent("shot");
+    await playResults(results, false, match.pattern);
+    if (match !== m) return;
+    if (msg.lost) return finish(true);
+    if (match.keepNext) { myTurnStart("Iniciativa: seguís de turno."); return; }
+    match.phase = "defend";
+    hudDirty = true;
+    say("Disparo resuelto. Esperando al rival…");
+  }
+
+  async function handleMan(msg) {
+    if (!match || !match.shared) return;
+    const m = match;
+    const sh = match.shared;
+    const k = msg.k;
+    if (k !== "move" && k !== "repair" && k !== "aim" && k !== "watch") return;
+    match.phase = "defend";
+    hudDirty = true;
+    const foe = foeWho();
+    let pub = [];
+    let wx = 0;
+    let wy = 0;
+    if (k === "move") {
+      pub = (Array.isArray(msg.collect) ? msg.collect : []).filter((p) => p && C.PICKUPS[p.type] && C.inBounds(p.x | 0, p.y | 0)).map((p) => ({ type: p.type, x: p.x | 0, y: p.y | 0 }));
+      C.applyPublicCollect(sh, foe, pub);
+      pub.forEach((p) => match.know.ghosts.set(C.key(p.x, p.y), { kind: "barco", t: sh.turnNo }));
+    } else if (k === "watch") {
+      wx = Math.max(0, Math.min(C.W - 1, msg.x | 0));
+      wy = Math.max(0, Math.min(C.H - 1, msg.y | 0));
+      C.addWatch(sh, foe, wx, wy);
+    } else if (k === "repair") {
+      remoteLeft = Math.min(17, remoteLeft + 1);
+    }
+    C.advance(sh, foe, k);
+    C.noteSpot(match.know, sanitizeSpot(msg.spot), sh.turnNo);
+    send({ t: "manack", spot: mySpot() });
+    await playManeuver(false, k, pub, { x: wx, y: wy });
+    if (match !== m) return;
+    if (msg.keep) { match.phase = "defend"; hudDirty = true; say("El rival tiene Iniciativa: juega de nuevo."); return; }
+    myTurnStart("Tu turno.");
+  }
+
+  function pickupText(list, mine) {
+    const names = list.map((p) => C.PICKUPS[p.type].name);
+    return (mine ? "Recogiste " : "El invasor recogió ") + names.join(" y ") + ".";
+  }
+
+  async function presentMine(out, act) {
+    if (out.t === "shot") {
+      rememberRemote(out.results);
+      tutoEvent("shot");
+      await playResults(out.results, false, out.pattern);
+      return;
+    }
+    match.stats.man++;
+    tutoEvent("man");
+    await playManeuver(true, out.t, out.pub || [], act);
+  }
+
+  async function playManeuver(mine, t, pub, act) {
+    const j = juke();
+    const g = gridGeom();
+    let text = "";
+    let title = "";
+    let sub = "";
+    if (t === "move") {
+      viewOverride = mine ? "local" : "remote";
+      hudDirty = true;
+      if (mine) {
+        const u = match.local.find((s) => s.id === act.unit);
+        if (u) C.cellsOf(u).forEach((c, i) => rings.push({ x: c.x, y: c.y, life: 1, color: "#86efac", size: 1.9, w: 3, delay: i * 0.05 }));
+        text = "Moviste una unidad. Tus marcas viejas en el rival no cambian, pero él pudo perder tu rastro.";
+      } else {
+        text = "El invasor movió una unidad. Lo que sabés de él puede estar viejo.";
+      }
+      pub.forEach((p) => {
+        const col = PK_COLOR[p.type];
+        burst(p.x, p.y, col);
+        const info = C.PICKUPS[p.type];
+        title = (mine ? "RECOGISTE " : "EL INVASOR TOMÓ ") + info.name.toUpperCase();
+        sub = info.short;
+        if (j) j.sfx.shield();
+      });
+      if (pub.length) text = pickupText(pub, mine) + " " + C.PICKUPS[pub[0].type].short;
+      if (title) showBanner(title, sub, mine ? "good" : "bad");
+    } else if (t === "repair") {
+      viewOverride = mine ? "local" : "remote";
+      hudDirty = true;
+      text = mine
+        ? "Reparaste un segmento. El rival ve tus marcas viejas: ya no son de fiar."
+        : "El invasor reparó una unidad. Tus marcas de impacto pueden estar viejas.";
+      if (mine && act && act.unit != null) {
+        const u = match.local.find((s) => s.id === act.unit);
+        if (u) C.cellsOf(u).forEach((c) => burst(c.x, c.y, "#4ade80"));
+      }
+      if (j) j.sfx.shield();
+    } else if (t === "aim") {
+      viewOverride = "remote";
+      hudDirty = true;
+      text = mine
+        ? "Cargaste el próximo disparo. Pagá la inversión antes de que caduque."
+        : "El invasor está cargando el disparo: el próximo puede caer en cruz o área.";
+      if (j) j.sfx.shield();
+    } else if (t === "watch") {
+      viewOverride = mine ? "remote" : "local";
+      hudDirty = true;
+      text = mine
+        ? "Zona vigilada: ves en vivo ahí unos turnos. El rival sabe qué zona."
+        : "El invasor vigila una zona de tu parque: ahí te ve en vivo.";
+      burst(act.x, act.y, mine ? "#22d3ee" : "#fb923c");
+      if (j) j.sfx.shield();
+    }
+    say(text);
+    await WAIT(pub.length ? 1500 : 950);
+    viewOverride = null;
+    hudDirty = true;
+  }
+
+  async function enemyTurn() {
+    const m = match;
+    if (!m) return;
+    const world = m.world;
+    const sh = m.shared;
+    match.phase = "defend";
+    hudDirty = true;
+    say("El invasor piensa su jugada…");
+    await WAIT(520);
+    for (let n = 0; n < 2; n++) {
+      if (match !== m) return;
+      const ai = world.p.inv;
+      C.expireSide(ai.side, sh);
+      const env = { side: ai.side, shared: sh, who: "inv", pers: ai.pers, consec: ai.consec, know: ai.know };
+      const act = C.aiChoose(env, Math.random);
+      const out = C.execAction(world, "inv", act);
+      if (out.t === "shot") await playResults(out.results, true, out.pattern);
+      else await playManeuver(false, out.t, out.pub || [], act);
+      if (match !== m) return;
+      if (out.lost) return finish(false);
+      if (n === 0 && ai.side.init > 0 && sh.turnNo < ai.side.initUntil) {
+        ai.side.init = 0;
+        say("El invasor usa Iniciativa: juega otra vez.");
+        await WAIT(500);
+        continue;
+      }
+      break;
+    }
+    if (match !== m) return;
+    myTurnStart("Tu turno.");
+    tutoTurn();
   }
 
   function rememberRemote(results) {
     results.forEach((r) => {
-      if (r.kind === "miss") match.remoteMarks.set(C.key(r.x, r.y), "miss");
-      if (r.kind === "hit") match.remoteMarks.set(C.key(r.x, r.y), "hit");
       if (r.kind === "sunk") {
         const cells = r.cells && r.cells.length ? r.cells : [{ x: r.x, y: r.y }];
-        cells.forEach((c) => match.remoteMarks.set(C.key(c.x, c.y), "sunk"));
         if (!match.wrecks.some((w) => w.name === r.ship)) match.wrecks.push({ name: r.ship, cells, t0: performance.now() });
       }
     });
     hudDirty = true;
   }
 
-  function enrich(results) {
-    return results.map((r) => {
-      if (r.kind !== "sunk") return r;
-      const ship = match.local.find((s) => s.name === r.ship);
-      return ship ? Object.assign({}, r, { cells: C.cellsOf(ship).map((c) => ({ x: c.x, y: c.y })) }) : r;
-    });
-  }
-
-  async function enemyStrike() {
-    const m = match;
-    if (!m) return;
-    match.phase = "defend";
-    ui.stage.classList.add("under-fire");
-    hudDirty = true;
-    say("El invasor apunta a tu parque…");
-    await WAIT(420);
-    if (match !== m) return; // user left to the menu while the AI was "thinking"
-    const shot = C.aiShot(match.local, match.hitsOnLocal, Math.random);
-    if (!shot) return finish(true);
-    const res = C.resolveShots(match.local, match.hitsOnLocal, [shot], match.shield);
-    if (res.shielded) match.shield = false;
-    await playResults(res.results, true);
-    if (match !== m) return;
-    if (res.lost) return finish(false);
-    match.phase = "attack";
-    hudDirty = true;
-    tutoTurn();
-    say("Tu turno. Tocá una celda del enemigo.");
-  }
-
-  async function handleFire(msg) {
-    if (!match) return;
-    const m = match;
-    match.phase = "defend";
-    hudDirty = true;
-    const res = C.resolveShots(match.local, match.hitsOnLocal, msg.shots || [], match.shield);
-    if (res.shielded) match.shield = false;
-    await playResults(res.results, true);
-    if (match !== m) return;
-    send({ t: "resolved", results: enrich(res.results), hpLeft: res.hp.left, lost: res.lost });
-    if (res.lost) return finish(false);
-    match.phase = "attack";
-    hudDirty = true;
-    say("Tu turno. Tocá el territorio enemigo.");
-  }
-
-  async function handleResolved(msg) {
-    if (!match) return;
-    const m = match;
-    remoteLeft = typeof msg.hpLeft === "number" ? msg.hpLeft : remoteLeft;
-    rememberRemote(msg.results || []);
-    await playResults(msg.results || [], false);
-    if (match !== m) return;
-    if (msg.lost) return finish(true);
-    match.phase = "defend";
-    hudDirty = true;
-    say("Disparo resuelto. Si el rival acierta, lo ves en tu territorio.");
-  }
 
   function parkName() { return (C.MAPS[opts.map] || {}).name || "el parque"; }
   function challengeUrl() {
@@ -1737,7 +2457,7 @@
       "st-acc": accuracyOf(stt) + "%",
       "st-sunk": stt.sunk + "/" + (match.remote ? match.remote.length : fleet),
       "st-taken": stt.taken + "/17",
-      "st-turns": stt.turns,
+      "st-turns": stt.man,
       "st-time": fmtTime((stt.t1 || Date.now()) - (stt.t0 || Date.now()))
     };
     Object.keys(vals).forEach((id) => { document.getElementById(id).textContent = String(vals[id]); });
@@ -1781,7 +2501,8 @@
   }
   function hostRematchGo() {
     opts.crop = Math.floor(Math.random() * 5);
-    send({ t: "rematchgo", crop: opts.crop });
+    opts.seed = Math.floor(Math.random() * 4294967296);
+    send({ t: "rematchgo", crop: opts.crop, seed: opts.seed });
     startRematch();
   }
   async function onShare() {
@@ -1844,6 +2565,7 @@
       if (C.FLEETS[msg.terrain]) opts.terrain = msg.terrain;
       if (C.NATIONS[msg.nation]) opts.nation = msg.nation;
       if (typeof msg.crop === "number") opts.crop = ((msg.crop % 5) + 5) % 5;
+      if (typeof msg.seed === "number") opts.seed = msg.seed >>> 0;
       applyTheme();
       freshMatch("inv");
       showBattle();
@@ -1863,26 +2585,6 @@
       hudDirty = true;
       return;
     }
-    if (msg.t === "ping" && match) {
-      const cells = C.area(msg.x, msg.y).map((c) => ({
-        x: c.x, y: c.y, ship: !!C.shipAt(match.local, c.x, c.y)
-      }));
-      send({ t: "pong", cells });
-      return;
-    }
-    if (msg.t === "pong" && match) {
-      let n = 0;
-      (msg.cells || []).forEach((c) => {
-        if (!C.inBounds(c.x, c.y)) return;
-        const k = C.key(c.x, c.y);
-        if (c.ship) { match.intelShip.add(k); n++; }
-        else match.intelEmpty.add(k);
-      });
-      say(n ? "Radar: " + n + " contacto" + (n === 1 ? "" : "s") + ". Seguís de turno." : "Radar limpio. Seguís de turno.");
-      if (match.phase !== "end") match.phase = "attack";
-      hudDirty = true;
-      return;
-    }
     if (msg.t === "rematch") {
       rematch.them = true;
       if (match && match.phase === "end") {
@@ -1894,12 +2596,15 @@
     if (msg.t === "rematchgo") {
       if (match && match.phase === "end" && rematch.me && match.role === "inv") {
         if (typeof msg.crop === "number") opts.crop = ((msg.crop % 5) + 5) % 5;
+        if (typeof msg.seed === "number") opts.seed = msg.seed >>> 0;
         startRematch();
       }
       return;
     }
     if (msg.t === "fire") lock(() => handleFire(msg));
     if (msg.t === "resolved") lock(() => handleResolved(msg));
+    if (msg.t === "man") lock(() => handleMan(msg));
+    if (msg.t === "manack") lock(() => handleManAck(msg));
   }
 
   function bindConn(c) {
@@ -1943,7 +2648,7 @@
   }
 
   function sendHello() {
-    send({ t: "hello", map: opts.map, terrain: opts.terrain, nation: opts.nation, crop: opts.crop || 0 });
+    send({ t: "hello", map: opts.map, terrain: opts.terrain, nation: opts.nation, crop: opts.crop || 0, seed: opts.seed >>> 0 });
   }
 
   function noteMenu(text) {
@@ -2056,6 +2761,7 @@
     if (j) j.start();
     blip();
     opts.crop = Math.floor(Math.random() * 5);
+    opts.seed = Math.floor(Math.random() * 4294967296);
     applyTheme();
     if (opts.mode === "pvp") {
       if (!window.Peer) {
@@ -2203,29 +2909,37 @@
     blip();
   });
   ui.ready.addEventListener("click", () => markReady());
-  ui.radar.addEventListener("click", () => {
-    if (!match || match.phase !== "attack" || match.powers.radar <= 0) return;
-    armed = armed === "radar" ? null : "radar";
-    hudDirty = true;
-    say(armed === "radar" ? "Radar armado: tocá el centro de un área de 3×3. No gasta el turno." : "Radar guardado.");
+  ui.shoot.addEventListener("click", () => {
+    if (!match || match.phase !== "attack") return;
+    selReset("shoot");
+    say("Disparar: tocá una celda del territorio enemigo.");
+    blip();
   });
-  ui.bomb.addEventListener("click", () => {
-    if (!match || match.phase !== "attack" || match.powers.bomb <= 0) return;
-    armed = armed === "bomb" ? null : "bomb";
-    hudDirty = true;
-    say(armed === "bomb" ? "Bomba armada: el próximo toque estalla en cruz y gasta el turno." : "Bomba guardada.");
+  ui.dev.addEventListener("click", () => {
+    if (!match || match.phase !== "attack") return;
+    if (sel.open) selReset("shoot");
+    else { selReset("menu"); say("Maniobrar no hace daño, pero rinde después. Elegí una."); }
+    blip();
   });
-  ui.camo.addEventListener("click", () => {
-    if (!match || match.phase !== "attack" || match.powers.camo <= 0 || match.shield) return;
-    match.powers.camo--;
-    match.stats.camo++;
-    match.shield = true;
-    armed = null;
+  ui.manu.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-man]");
+    if (!b || !match || match.phase !== "attack") return;
+    const k = b.dataset.man;
+    if (k === "cancel") { selReset("shoot"); say("Disparar: tocá una celda del territorio enemigo."); blip(); return; }
+    const st = manState(k);
+    if (!st.ok) { say(st.why); return; }
+    blip();
+    if (k === "apuntar") { lock(() => takeAction({ t: "aim" })); return; }
+    const mode = k === "mover" ? "move" : k === "reconocer" ? "watch" : "repair";
+    if (sel.mode === mode) { selReset("menu"); return; }
+    selReset(mode);
+    say(mode === "move" ? "Mover: tocá una unidad tuya." : mode === "watch" ? "Vigilar: tocá el centro de la zona 3×3 que querés ver en vivo." : "Reparar: tocá una unidad tuya dañada.");
+  });
+  ui.chips.addEventListener("click", (e) => {
+    if (!e.target.closest("#chip-init") || !match || match.phase !== "attack") return;
+    sel.initOn = !sel.initOn;
     hudDirty = true;
-    tutoEvent("camo");
-    const j = juke();
-    if (j) j.sfx.shield();
-    say("Camuflaje activo. El próximo ataque enemigo no deja marca.");
+    say(sel.initOn ? "Iniciativa lista: tu próxima jugada no gasta el turno." : "Iniciativa guardada.");
   });
 
   const hudBtn = document.getElementById("hud-toggle");
@@ -2309,15 +3023,27 @@
     crop: opts.crop,
     map: opts.map,
     hp: hpOf(match.local, match.hitsOnLocal).left,
-    powers: { ...match.powers },
-    shield: match.shield,
+    turnNo: match.shared ? match.shared.turnNo : 0,
+    level: match.shared ? C.warLevel(match.shared) : 0,
+    sel: { mode: sel.mode, unit: sel.unit, open: sel.open, initOn: sel.initOn },
+    charge: match.side.charge,
+    init: match.side.init,
+    armor: match.local.reduce((a, u) => a + (u.armor || 0), 0),
+    know: { marks: match.know.marks.size, live: match.know.live.size, ghosts: match.know.ghosts.size },
+    pickups: match.shared ? match.shared.pickups.map((p) => ({ type: p.type, x: p.x, y: p.y, owner: p.owner || null })) : [],
+    zones: match.shared ? C.zonesOf(match.shared, match.role).length : 0,
+    foeZones: match.shared ? C.zonesOf(match.shared, C.other(match.role)).length : 0,
+    pers: match.aiPers || null,
+    movable: match.shared ? match.local.filter((u) => C.moveOptions(match.side, match.shared, u, match.role).length).map((u) => ({ id: u.id, cells: C.cellsOf(u) })) : [],
+    handles: moveHandles().map((o) => ({ x: o.h.x, y: o.h.y, dx: o.dx, dy: o.dy, collect: o.collect })),
+    repairable: match.shared ? C.repairable(match.side).map((u) => C.cellsOf(u)[0]) : [],
+    foeHp: foeHp().left,
     clock: clockLeft,
     sealed,
     localReady,
     remoteReady,
     battleStarted,
     stats: { ...match.stats },
-    intel: Array.from(match.intelShip),
     tuto: tuto ? tuto.step : null
   }) : { phase: "menu" };
 

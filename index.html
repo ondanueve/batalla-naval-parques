@@ -18,7 +18,7 @@
       <h1>PARQUES<br>EN GUERRA</h1>
       <p class="l1">Argentina guarda sus parques nacionales.</p>
       <p class="l2">Un invasor quiere tomarlos. Tu flota está escondida en el mapa.</p>
-      <p class="l3">Escondé, adiviná y hundí antes de que te hundan.</p>
+      <p class="l3">Cada turno: disparás ya o te desarrollás para después.</p>
       <button type="button" id="intro-go" class="go">Tocar para empezar</button>
     </div>
   </div>
@@ -70,8 +70,9 @@
         <ol class="steps">
           <li>Grilla 10×20. La flota ya está puesta: tenés 60 segundos. Estoy listo la cierra; en PvP arranca cuando los dos marcan, o al llegar a 0.</li>
           <li>Agua: barcos. Tierra: tanques. Mixto: cada uno en lo suyo. Si se pisan o se salen, quedan en rojo y no se apoyan.</li>
-          <li>Al atacar ves solo al enemigo. Cuando te atacan, ves solo lo tuyo.</li>
-          <li>Radar mira sin gastar el turno. Bomba estalla en cruz. Camuflaje anula un ataque.</li>
+          <li>Cada turno elegís: <b>Disparar</b> (daño ahora) o <b>Maniobrar</b> (mover, vigilar, reparar o apuntar: no hace daño, pero rinde después). Es el dilema de ganar material o desarrollarse, como en el ajedrez.</li>
+          <li>Ves en vivo solo las zonas que vigilás o tus torres. Del resto te queda el mapa explorado: lo último que supiste, que puede estar viejo. Los tesoros del mapa se cobran moviendo una unidad encima.</li>
+          <li>La guerra escala: cada vez menos maniobras y más disparos en cruz y área. Nadie puede esperar para siempre.</li>
         </ol>
       </div>
       <footer class="dock">
@@ -94,7 +95,7 @@
             <div><b id="st-acc">0%</b><small>Precisión</small></div>
             <div><b id="st-sunk">0</b><small>Hundidos</small></div>
             <div><b id="st-taken">0</b><small>Daño recibido</small></div>
-            <div><b id="st-turns">0</b><small>Turnos</small></div>
+            <div><b id="st-turns">0</b><small>Maniobras</small></div>
             <div><b id="st-time">0:00</b><small>Duración</small></div>
           </div>
           <div class="end-actions">
@@ -134,10 +135,27 @@
           <p id="coach-text"></p>
           <button type="button" id="coach-ok" class="hidden">Entendido</button>
         </div>
-        <div class="tools" id="tools" role="group" aria-label="Acciones del turno">
-          <button type="button" id="radar" disabled>Radar 2</button>
-          <button type="button" id="bomb" disabled>Bomba 1</button>
-          <button type="button" id="camo" disabled>Camu 1</button>
+        <div id="turnbar" class="hidden">
+          <div id="warmeter" title="La guerra se acelera: cada vez hay menos tiempo para desarrollarse">
+            <span id="war-name">CALMA TENSA</span>
+            <span class="wm"><i></i></span>
+            <span id="war-sub">Ronda 1</span>
+          </div>
+          <div id="chips" aria-label="Inversiones pendientes"></div>
+          <div class="choice" role="group" aria-label="Elegí tu jugada del turno">
+            <button type="button" id="act-shoot" class="act shoot"><b>Disparar</b><small>Daño ahora</small></button>
+            <span class="or">o</span>
+            <button type="button" id="act-dev" class="act dev"><b>Maniobrar</b><small>Rinde después</small></button>
+          </div>
+          <div id="manu" class="hidden" role="group" aria-label="Maniobras">
+            <button type="button" data-man="mover"><i>↔</i><span>Mover</span></button>
+            <button type="button" data-man="reconocer"><i>◎</i><span>Vigilar</span></button>
+            <button type="button" data-man="reparar"><i>✚</i><span>Reparar</span></button>
+            <button type="button" data-man="apuntar"><i>⊕</i><span>Apuntar</span></button>
+            <button type="button" data-man="cancel" id="man-cancel" class="hidden"><i>✕</i><span>Volver</span></button>
+          </div>
+        </div>
+        <div class="tools" id="tools" role="group" aria-label="Preparación">
           <button type="button" id="rotate" class="hidden">Rotar</button>
           <button type="button" id="ready" class="hidden">Estoy listo</button>
         </div>

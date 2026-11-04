@@ -836,3 +836,81 @@ body.log-on #log { display: block; }
   #log { right: 64px; top: 14px; width: 300px; max-height: 60vh; }
   #battle #clock, #battle #incoming { top: 14px; }
 }
+
+/* ===== DISPARAR O DESARROLLAR ===== */
+#turnbar { display: flex; flex-direction: column; gap: 6px; }
+#turnbar.hidden { display: none; }
+#warmeter {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em;
+  color: #cbd5e1;
+}
+#war-name { font-family: "Press Start 2P", monospace; font-size: 0.5rem; letter-spacing: 0; color: #86efac; white-space: nowrap; }
+#warmeter.l1 #war-name { color: #fde047; }
+#warmeter.l2 #war-name { color: #fb923c; }
+#warmeter.l3 #war-name { color: #f87171; animation: warBlink 0.9s ease-in-out infinite; }
+@keyframes warBlink { 50% { opacity: 0.45; } }
+#warmeter .wm { flex: 1; height: 7px; border-radius: 99px; background: rgba(255,255,255,.14); overflow: hidden; min-width: 40px; }
+#warmeter .wm i { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, #4ade80, #fde047, #fb923c, #ef4444); background-size: 400% 100%; transition: width .4s ease; }
+#war-sub { white-space: nowrap; color: #e2e8f0; font-weight: 700; }
+
+#chips { display: flex; flex-wrap: wrap; gap: 5px; min-height: 22px; }
+#chips .chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 99px;
+  font-size: 0.72rem; font-weight: 800; line-height: 1.5;
+  border: 1px solid rgba(255,255,255,.22);
+  background: rgba(15,23,42,.7); color: #e2e8f0;
+  font-family: inherit;
+}
+#chips .chip.aim { border-color: #fb923c; color: #fed7aa; background: rgba(124,45,18,.55); }
+#chips .chip.init { border-color: #fde047; color: #fef9c3; background: rgba(113,63,18,.55); cursor: pointer; }
+#chips .chip.init[aria-pressed="true"] { background: #fde047; color: #422006; }
+#chips .chip.armor { border-color: #4ade80; color: #bbf7d0; background: rgba(6,78,59,.55); }
+#chips .chip.watch { border-color: #22d3ee; color: #a5f3fc; background: rgba(8,51,68,.6); }
+#chips .chip.tower { border-color: #22d3ee; color: #a5f3fc; background: rgba(8,51,68,.6); }
+#chips .chip.seen { border-color: #f87171; color: #fecaca; background: rgba(127,29,29,.6); animation: warBlink 1.2s ease-in-out infinite; }
+#chips .chip.old { border-style: dashed; border-color: #fcd34d; color: #fde68a; }
+#chips .chip.none { color: #94a3b8; border-style: dashed; }
+
+#turnbar .choice { display: flex; align-items: stretch; gap: 6px; }
+#turnbar .or { align-self: center; font-size: 0.72rem; font-weight: 800; color: #94a3b8; }
+#turnbar .act {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px; min-height: 48px; padding: 4px 8px;
+  border-radius: 12px; border: 2px solid rgba(255,255,255,.3);
+  color: #fff; font-family: inherit; cursor: pointer;
+  box-shadow: none;
+}
+#turnbar .act b { font-size: 0.98rem; line-height: 1.1; }
+#turnbar .act small { font-size: 0.68rem; font-weight: 700; opacity: .85; }
+#turnbar .act.shoot { background: linear-gradient(180deg, rgba(220,38,38,.9), rgba(153,27,27,.92)); border-color: #fca5a5; }
+#turnbar .act.dev { background: linear-gradient(180deg, rgba(8,145,178,.88), rgba(14,116,144,.92)); border-color: #67e8f9; }
+#turnbar .act[aria-pressed="true"] { outline: 3px solid #fff; outline-offset: 1px; }
+#turnbar .act:disabled { opacity: .4; }
+#turnbar .act.pulse, #manu button.pulse { animation: toolPulse 1s ease-in-out infinite; border-color: #fde047; }
+#manu { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+#manu.hidden { display: none; }
+#manu button {
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+  min-height: 44px; padding: 3px 2px;
+  border-radius: 10px; border: 1px solid rgba(255,255,255,.3);
+  background: rgba(30,41,59,.85); color: #f1f5f9;
+  font-family: inherit; font-size: 0.7rem; font-weight: 800; cursor: pointer; box-shadow: none;
+}
+#manu button i { font-style: normal; font-size: 1.1rem; line-height: 1.2; }
+#manu button[aria-pressed="true"] { background: #67e8f9; color: #083344; border-color: #fff; }
+#manu button[aria-disabled="true"] { opacity: .4; filter: grayscale(.6); }
+@media (min-width: 900px) and (min-height: 560px) {
+  #turnbar .act { min-height: 54px; }
+  #battle .tools { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* el panel deja pasar los toques a la grilla, salvo en sus botones */
+#hud-bottom { pointer-events: none; }
+#hud-bottom button, #hud-bottom input, #hud-bottom #coach { pointer-events: auto; }
+#hud-bottom.slim #warmeter, #hud-bottom.slim #chips, #hud-bottom.slim .choice, #hud-bottom.slim #back { display: none; }
+#hud-bottom.slim #manu { grid-template-columns: repeat(5, 1fr); }
+#hud-bottom.slim #manu button { min-height: 38px; }
+#manu #man-cancel { background: rgba(127,29,29,.85); }
+#manu #man-cancel.hidden { display: none; }
