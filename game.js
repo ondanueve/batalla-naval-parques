@@ -2948,6 +2948,16 @@
     hudBtn.setAttribute("aria-pressed", off ? "false" : "true");
     blip();
   });
+  const foldBtn = document.getElementById("hud-fold");
+  function setFold(on) {
+    document.body.classList.toggle("hud-fold", on);
+    foldBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    foldBtn.textContent = on ? "▴" : "▾";
+    foldBtn.title = on ? "Mostrar el panel de turno" : "Plegar el panel de turno";
+    try { localStorage.setItem("parques.fold", on ? "1" : "0"); } catch (e) { /* sin almacenamiento */ }
+  }
+  try { if (localStorage.getItem("parques.fold") === "1") setFold(true); } catch (e) { /* sin almacenamiento */ }
+  foldBtn.addEventListener("click", () => { setFold(!document.body.classList.contains("hud-fold")); blip(); });
   document.getElementById("log-toggle").addEventListener("click", () => {
     document.body.classList.toggle("log-on");
     blip();

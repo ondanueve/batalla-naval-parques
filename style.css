@@ -914,3 +914,7 @@ body.log-on #log { display: block; }
 #hud-bottom.slim #manu button { min-height: 38px; }
 #manu #man-cancel { background: rgba(127,29,29,.85); }
 #manu #man-cancel.hidden { display: none; }
+
+/* panel plegado: deja la grilla libre para tocar las filas de abajo */
+body.hud-fold #hud-bottom { opacity: 0; visibility: hidden; }
+#hud-fold[aria-pressed="true"] { background: #fde047; color: #1f2937; }

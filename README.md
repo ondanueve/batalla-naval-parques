@@ -7,7 +7,7 @@ Tres mapas: Nahuel Huapi, Iguazú y Los Glaciares. El terreno puede ser agua, ti
 ## Cómo se juega
 
 1. La flota aparece al azar en una grilla de **10×20** sobre un recorte satelital del parque (cinco encuadres por terreno). Hay **60 segundos** para moverla. **Estoy listo** cierra antes. En PvP empieza cuando los dos están listos, o cuando el reloj llega a 0. En agua van barcos, en tierra tanques, y en mixto cada uno en lo suyo. Si se pisan o se salen del mapa, quedan en rojo y no se apoyan.
-2. La grilla ocupa toda la pantalla. Paneles, bitácora y botones son capas translúcidas que se ocultan con el botón ◐.
+2. La grilla ocupa toda la pantalla. Paneles, bitácora y botones son capas translúcidas: ◐ las oculta todas y ▾ pliega solo el panel de turno, para tocar las filas de abajo.
 3. **Cada turno elegís una sola cosa: disparar o desarrollarte.** Es el dilema de ganar material o mejorar la posición en ajedrez. No hay dinero ni recursos.
    - **Disparar** hace daño ahora. Se puede disparar de nuevo a una celda ya golpeada: los barcos se mueven y se reparan.
    - **Maniobrar** no hace daño, pero rinde después:
