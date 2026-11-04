@@ -1,0 +1,11 @@
+partidas 1500 | turnos medios 69.5 | máx 233 | sin final 0 | arg (mueve 1ro) gana 50%
+terminan en nivel de guerra [0,1,2,3]: 0,0,0,1500
+agresivo vs agresivo       n=167  gana 1ro:  48% turnos:  67 maniobras: 7%
+agresivo vs cauto          n=167  gana 1ro:  52% turnos:  67 maniobras: 12%
+agresivo vs oportunista    n=166  gana 1ro:  28% turnos:  70 maniobras: 9%
+cauto vs agresivo          n=167  gana 1ro:  51% turnos:  67 maniobras: 11%
+cauto vs cauto             n=167  gana 1ro:  54% turnos:  67 maniobras: 15%
+cauto vs oportunista       n=166  gana 1ro:  30% turnos:  72 maniobras: 14%
+oportunista vs agresivo    n=167  gana 1ro:  67% turnos:  68 maniobras: 8%
+oportunista vs cauto       n=167  gana 1ro:  71% turnos:  72 maniobras: 14%
+oportunista vs oportunista n=166  gana 1ro:  50% turnos:  74 maniobras: 17%
