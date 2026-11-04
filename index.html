@@ -11,6 +11,17 @@
   <script src="vendor/peerjs.min.js"></script>
 </head>
 <body data-map="nahuel" data-terrain="agua">
+  <div id="intro" class="hidden" role="dialog" aria-label="Introducción">
+    <button type="button" id="intro-skip" class="intro-skip">Saltar</button>
+    <div class="intro-art" aria-hidden="true"></div>
+    <div class="intro-body">
+      <h1>PARQUES<br>EN GUERRA</h1>
+      <p class="l1">Argentina guarda sus parques nacionales.</p>
+      <p class="l2">Un invasor quiere tomarlos. Tu flota está escondida en el mapa.</p>
+      <p class="l3">Escondé, adiviná y hundí antes de que te hundan.</p>
+      <button type="button" id="intro-go" class="go">Tocar para empezar</button>
+    </div>
+  </div>
   <div id="app">
     <section id="menu" class="screen">
       <header class="hero">
@@ -65,6 +76,7 @@
       </div>
       <footer class="dock">
         <button type="button" class="go" id="start">Entrar al parque</button>
+        <button type="button" class="linklike" id="how">¿Cómo se juega? · Tutorial</button>
       </footer>
     </section>
 
@@ -102,6 +114,11 @@
         <button type="button" id="camo" disabled>Camu 1</button>
         <button type="button" id="rotate" class="hidden">Rotar</button>
         <button type="button" id="ready" class="hidden">Estoy listo</button>
+      </div>
+      <div id="coach" class="hidden" role="status">
+        <div class="coach-top"><span id="coach-step"></span><button type="button" id="coach-skip">Saltar tutorial</button></div>
+        <p id="coach-text"></p>
+        <button type="button" id="coach-ok" class="hidden">Entendido</button>
       </div>
       <div id="dialogue">Elegí parque, terreno e invasor.</div>
       <button type="button" id="back">Menú</button>

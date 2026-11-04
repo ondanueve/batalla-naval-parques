@@ -103,6 +103,71 @@
   let hostTries = 0;
   const mapImgs = {};
 
+  // --- intro + tutorial (remembered in localStorage) ---
+  const KEY_INTRO = "parques.intro.v1";
+  const KEY_TUTO = "parques.tuto.v1";
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
+  };
+  let tuto = null; // { step, pending } while the guided tutorial is on
+  let tutoForce = false;
+  const TUTO_COPY = {
+    0: ["PREPARACIÓN", "Tu flota ya está puesta (podés arrastrarla). Tocá «Estoy listo» para empezar."],
+    1: ["PASO 1 DE 3 · DISPARAR", "La celda amarilla es una pista de exploración. Tocala y mirá si hay un barco enemigo."],
+    2: ["PASO 2 DE 3 · RADAR", "Tocá «Radar» y después el centro de un área: revela contactos 3×3 y no gasta el turno."],
+    3: ["PASO 3 DE 3 · CAMUFLAJE", "Tocá «Camu»: el próximo ataque enemigo no te deja marca. Usalo cuando te tengan cerca."],
+    4: ["¡LISTO!", "Ya sabés jugar. Hundí toda la flota enemiga antes de que hundan la tuya."]
+  };
+
+  function tutoSave() { store.set(KEY_TUTO, "1"); }
+  function pulseOn(el, on) { if (el) el.classList.toggle("pulse", !!on); }
+  function tutoRender() {
+    const box = document.getElementById("coach");
+    if (!box) return;
+    if (!tuto) {
+      box.classList.add("hidden");
+      pulseOn(ui.ready, false);
+      pulseOn(ui.radar, false);
+      pulseOn(ui.camo, false);
+      requestAnimationFrame(fit);
+      return;
+    }
+    const c = TUTO_COPY[tuto.step];
+    document.getElementById("coach-step").textContent = c[0];
+    document.getElementById("coach-text").textContent = c[1];
+    document.getElementById("coach-ok").classList.toggle("hidden", tuto.step !== 4);
+    document.getElementById("coach-skip").classList.toggle("hidden", tuto.step === 4);
+    box.classList.remove("hidden");
+    pulseOn(ui.ready, tuto.step === 0);
+    pulseOn(ui.radar, tuto.step === 2);
+    pulseOn(ui.camo, tuto.step === 3);
+    requestAnimationFrame(fit);
+  }
+  function tutoStart() {
+    if (opts.mode !== "pvc") return;
+    if (store.get(KEY_TUTO) && !tutoForce) return;
+    tutoForce = false;
+    tuto = { step: 0, pending: 0 };
+    tutoRender();
+  }
+  function tutoEnd() {
+    if (!tuto) return;
+    tuto = null;
+    tutoSave();
+    tutoRender();
+  }
+  function tutoEvent(name) {
+    if (!tuto) return;
+    if (name === "ready" && tuto.step === 0) { tuto.step = 1; tutoRender(); }
+    else if (name === "shot" && tuto.step === 1) tuto.pending = 2;
+    else if (name === "radar" && tuto.step === 2) { tuto.step = 3; tutoRender(); }
+    else if (name === "camo" && tuto.step === 3) { tuto.step = 4; tutoSave(); tutoRender(); }
+  }
+  function tutoTurn() {
+    if (tuto && tuto.pending) { tuto.step = tuto.pending; tuto.pending = 0; tutoRender(); }
+  }
+
   function say(text) {
     ui.dialogue.textContent = text;
   }
@@ -189,6 +254,8 @@
     slow = 0;
     flashScreen = 0;
     hideBanner();
+    tuto = null;
+    tutoRender();
     ui.end.classList.add("hidden");
     ui.battle.classList.add("hidden");
     ui.menu.classList.remove("hidden");
@@ -431,6 +498,23 @@
     return cv;
   }
 
+  function drawTutoHint(g, time) {
+    if (!tuto || tuto.step !== 1 || !match || match.phase !== "attack" || viewKind() !== "remote") return;
+    match.intelShip.forEach((k) => {
+      if (match.hitsOnRemote.has(k)) return;
+      const [x, y] = k.split(",").map(Number);
+      const c = cellCenter(g, x, y);
+      for (let i = 0; i < 2; i++) {
+        const ph = ((time / 1100) + i * 0.5) % 1;
+        ctx.strokeStyle = "rgba(253,224,71," + (0.9 * (1 - ph)).toFixed(3) + ")";
+        ctx.lineWidth = 3 * g.dpr;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, g.cellW * (0.5 + ph * 1.3), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
+  }
+
   function draw(time) {
     nowT = time;
     const g = gridGeom();
@@ -536,6 +620,7 @@
     ctx.restore();
 
     if (match) drawPieces(g, time);
+    drawTutoHint(g, time);
     drawFx(g);
     ctx.restore();
     if (flashScreen > 0.01) {
@@ -1287,6 +1372,7 @@
       const sc = C.scout(match.remote, Math.random);
       match.intelShip.add(C.key(sc.x, sc.y));
       match.phase = "attack";
+      tutoEvent("ready");
       say(C.MAPS[opts.map].scout + " Tu turno: tocá una celda enemiga.");
       requestAnimationFrame(fit);
       return;
@@ -1479,6 +1565,7 @@
         else match.intelEmpty.add(k);
       });
       burst(cell.x, cell.y, "#facc15");
+      tutoEvent("radar");
       const j = juke();
       if (j) j.sfx.shield();
       say(n ? "Radar: " + n + " contacto" + (n === 1 ? "" : "s") + " en el área. Seguís de turno." : "Radar limpio. Seguís de turno.");
@@ -1505,6 +1592,7 @@
     }
     if (bomb) match.powers.bomb--;
     armed = null;
+    tutoEvent("shot");
     match.phase = "resolving";
     hudDirty = true;
     if (opts.mode === "pvc") {
@@ -1560,6 +1648,7 @@
     if (res.lost) return finish(false);
     match.phase = "attack";
     hudDirty = true;
+    tutoTurn();
     say("Tu turno. Tocá una celda del enemigo.");
   }
 
@@ -1597,6 +1686,7 @@
     match.phase = "end";
     stopClock();
     hudDirty = true;
+    if (tuto) tutoEnd();
     // "win" is from the local player's side; the joiner plays the invader (role "inv"),
     // so the Argentine-flavored headline must be flipped for them.
     const argentinaHolds = match.role === "inv" ? !win : win;
@@ -1845,6 +1935,7 @@
     freshMatch("arg");
     showBattle();
     beginPlace();
+    tutoStart();
   }
 
   function loop(t) {
@@ -1985,6 +2076,7 @@
     match.shield = true;
     armed = null;
     hudDirty = true;
+    tutoEvent("camo");
     const j = juke();
     if (j) j.sfx.shield();
     say("Camuflaje activo. El próximo ataque enemigo no deja marca.");
@@ -1998,6 +2090,39 @@
   window.addEventListener("resize", () => {
     if (ui.battle && !ui.battle.classList.contains("hidden")) fit();
   });
+
+  document.getElementById("coach-skip").addEventListener("click", () => { tutoEnd(); say("Tutorial salteado. Podés repetirlo desde el menú."); });
+  document.getElementById("coach-ok").addEventListener("click", () => tutoEnd());
+  document.getElementById("how").addEventListener("click", () => {
+    const pvc = document.querySelector("#modes [data-mode=pvc]");
+    if (pvc) pvc.click();
+    tutoForce = true;
+    startGame();
+  });
+
+  function setupIntro() {
+    const el = document.getElementById("intro");
+    if (!el) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get("tutorial") === "1") tutoForce = true;
+    if (store.get(KEY_INTRO) || params.get("sala")) {
+      el.classList.add("hidden");
+      return;
+    }
+    el.classList.remove("hidden");
+    const close = () => {
+      store.set(KEY_INTRO, "1");
+      el.classList.add("hidden");
+      blip();
+    };
+    document.getElementById("intro-skip").addEventListener("click", close);
+    document.getElementById("intro-go").addEventListener("click", close);
+    el.addEventListener("click", (ev) => {
+      if (ev.target.closest("button")) return;
+      el.classList.add("fast"); // tap: show every line right away
+    });
+  }
+  setupIntro();
 
   wireJuke();
   applyTheme();
@@ -2018,7 +2143,9 @@
     sealed,
     localReady,
     remoteReady,
-    battleStarted
+    battleStarted,
+    intel: Array.from(match.intelShip),
+    tuto: tuto ? tuto.step : null
   }) : { phase: "menu" };
 
   const sala = new URLSearchParams(location.search).get("sala");
