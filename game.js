@@ -169,8 +169,18 @@
     if (tuto && tuto.pending) { tuto.step = tuto.pending; tuto.pending = 0; tutoRender(); }
   }
 
+  const logList = document.getElementById("log-list");
+  let lastSay = "";
   function say(text) {
     ui.dialogue.textContent = text;
+    if (logList && text && text !== lastSay && !/^(Tu turno\.|El invasor apunta)/.test(text)) {
+      lastSay = text;
+      const li = document.createElement("li");
+      li.textContent = text;
+      logList.appendChild(li);
+      while (logList.children.length > 60) logList.removeChild(logList.firstChild);
+      logList.parentNode.scrollTop = logList.parentNode.scrollHeight;
+    }
   }
   function juke() { return window.Juke; }
   function blip() { const j = juke(); if (j) j.sfx.ui(); }
@@ -276,6 +286,7 @@
     ui.menu.classList.add("hidden");
     ui.battle.classList.remove("hidden");
     ui.end.classList.add("hidden");
+    if (logList) { logList.textContent = ""; lastSay = ""; }
     applyTheme();
     const nation = C.NATIONS[opts.nation];
     document.getElementById("inv-name").textContent = nation.flag + " " + nation.name.toUpperCase();
