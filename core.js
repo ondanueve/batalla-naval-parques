@@ -187,6 +187,35 @@
     return fleet;
   }
 
+  // Completa al azar las unidades que todavía no se colocaron (unplaced). Devuelve true si entraron todas.
+  function placeRemaining(fleet, terrain, rng, map, crop) {
+    const pending = fleet.filter((s) => s.unplaced);
+    for (const s of pending) {
+      let done = false;
+      for (let n = 0; n < 600 && !done; n++) {
+        const horizontal = rng() > 0.42;
+        const x = Math.floor(rng() * (horizontal ? W - s.size + 1 : W));
+        const y = Math.floor(rng() * (horizontal ? H : H - s.size + 1));
+        if (canPlace(fleet, x, y, s.size, horizontal, s.id, s.kind, terrain, map, crop || 0)) {
+          s.x = x; s.y = y; s.horizontal = horizontal; done = true;
+        }
+      }
+      for (let y = 0; y < H && !done; y++) {
+        for (let x = 0; x < W && !done; x++) {
+          for (const horizontal of [true, false]) {
+            if (canPlace(fleet, x, y, s.size, horizontal, s.id, s.kind, terrain, map, crop || 0)) {
+              s.x = x; s.y = y; s.horizontal = horizontal; done = true; break;
+            }
+          }
+        }
+      }
+      if (!done) return false;
+      s.unplaced = false;
+      s.lifted = false;
+    }
+    return true;
+  }
+
   function fleetHp(fleet, hits) {
     let total = 0;
     let left = 0;
@@ -782,7 +811,7 @@
 
   return {
     W, H, NATIONS, MAPS, FLEETS, COLORS,
-    key, cellsOf, inBounds, canPlace, placeIssue, placeRandom, fleetHp,
+    key, cellsOf, inBounds, canPlace, placeIssue, placeRandom, placeRemaining, fleetHp,
     shipAt, shipStatus, resolveShots, cross, area, aiShot, mulberry32,
     battleMayStart, isLand, CROP_COUNT, MIXED,
     PICKUPS, MANEUVERS, PERSONALITIES, PERS_LABEL, WAR_NAMES, other, newSide, newKnow, newShared, newWorld,

@@ -68,7 +68,7 @@
           <div class="row" id="nations"></div>
         </div>
         <ol class="steps">
-          <li>Grilla 10×20. La flota ya está puesta: tenés 60 segundos. Estoy listo la cierra; en PvP arranca cuando los dos marcan, o al llegar a 0.</li>
+          <li>Grilla 10×20. Colocás tu flota unidad por unidad (mantené apretado para rotar): tenés 60 segundos y lo que falte se completa al azar. Estoy listo la cierra; en PvP arranca cuando los dos marcan, o al llegar a 0.</li>
           <li>Agua: barcos. Tierra: tanques. Mixto: cada uno en lo suyo. Si se pisan o se salen, quedan en rojo y no se apoyan.</li>
           <li>Cada turno elegís: <b>Disparar</b> (daño ahora) o <b>Maniobrar</b> (mover, vigilar, reparar o apuntar: no hace daño, pero rinde después). Es el dilema de ganar material o desarrollarse, como en el ajedrez.</li>
           <li>Ves en vivo solo las zonas que vigilás o tus torres. Del resto te queda el mapa explorado: lo último que supiste, que puede estar viejo. Los tesoros del mapa se cobran moviendo una unidad encima.</li>
@@ -158,11 +158,12 @@
         </div>
         <div class="tools" id="tools" role="group" aria-label="Preparación">
           <button type="button" id="rotate" class="hidden">Rotar</button>
-          <button type="button" id="ready" class="hidden">Estoy listo</button>
         </div>
         <div id="dialogue">Elegí parque, terreno e invasor.</div>
         <button type="button" id="back">Menú</button>
       </div>
+      <div id="place-msg" class="hidden" role="status" aria-live="polite"><b></b><small></small></div>
+      <button type="button" id="ready" class="hidden">Estoy listo</button>
       <aside id="log" class="ov" aria-label="Crónica de la batalla"><h3>Crónica</h3><ol id="log-list"></ol></aside>
     </section>
   </div>

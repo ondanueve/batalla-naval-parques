@@ -90,6 +90,10 @@
   let gestureHeld = false;
   let preview = null;
   let lastPlaceTag = "";
+  let placeNote = "";
+  let placeNoteT = 0;
+  let pressT = 0;
+  let pressRot = false;
   let clockLeft = 60;
   let clockId = 0;
   let busy = false;
@@ -120,7 +124,7 @@
   let tuto = null; // { step, pending } while the guided tutorial is on
   let tutoForce = false;
   const TUTO_COPY = {
-    0: ["PREPARACIÓN", "Tu flota ya está puesta (podés arrastrarla). Tocá «Estoy listo» para empezar."],
+    0: ["PREPARACIÓN", "Colocá tu flota unidad por unidad. Tocá «Estoy listo» para empezar."],
     1: ["PASO 1 DE 3 · DISPARAR", "Disparar da daño ahora. Tocá cualquier celda del mapa enemigo: no sabés dónde está nadie."],
     2: ["PASO 2 DE 3 · DESARROLLAR", "Maniobrar no hace daño, pero rinde después. Tocá «Maniobrar» y elegí «Apuntar»: el próximo disparo cae en cruz."],
     3: ["PASO 3 DE 3 · COBRAR", "Tocá «Disparar» y una celda: tu carga cae en cruz. Esa es la inversión pagando."],
@@ -484,6 +488,8 @@
   function flushHud() {
     const fighting = !!match && (match.phase === "attack" || match.phase === "defend" || match.phase === "resolving");
     if (document.body.classList.contains("in-battle") !== fighting) document.body.classList.toggle("in-battle", fighting);
+    const placingNow = !!match && (match.phase === "place" || match.phase === "sealed");
+    if (document.body.classList.contains("placing") !== placingNow) document.body.classList.toggle("placing", placingNow);
     if (!hudDirty || !match) return;
     hudDirty = false;
     const localHp = hpOf(match.local, match.hitsOnLocal);
@@ -501,12 +507,39 @@
     const placing = match.phase === "place" && !sealed;
     const waitingReady = match.phase === "sealed";
     const combat = match.phase === "attack" || match.phase === "defend" || match.phase === "resolving" || match.phase === "end";
-    ui.rotate.classList.toggle("hidden", !placing);
-    ui.ready.classList.toggle("hidden", !(placing || waitingReady));
+    ui.rotate.classList.add("hidden");
+    ui.ready.classList.toggle("hidden", !((placing && placedAll()) || waitingReady));
+    paintPlaceMsg(placing, waitingReady);
     ui.ready.disabled = waitingReady;
     ui.ready.textContent = waitingReady ? "Esperando" : "Estoy listo";
     paintTurnbar(combat);
     ui.rotate.disabled = sealed || !hand;
+  }
+
+  function paintPlaceMsg(placing, waitingReady) {
+    const box = document.getElementById("place-msg");
+    if (!box) return;
+    let main = "";
+    let sub = "";
+    if (placing) {
+      const next = match.local.find((u) => u.unplaced);
+      const secs = Math.max(0, clockLeft) + " s";
+      if (next) {
+        main = "Posicioná tu " + next.name.toLowerCase() + ".";
+        sub = placeNote || (secs + " · mantené apretado para rotar" + (hand && hand.horizontal ? "" : " (vertical)"));
+        if (tuto && tuto.step === 0 && !placeNote) sub = "Tutorial: " + secs + " · arrastrá, soltá y mantené apretado para rotar";
+      } else {
+        main = "Flota lista.";
+        sub = placeNote || (secs + " · tocá una unidad para moverla, o Estoy listo");
+      }
+    } else if (waitingReady) {
+      main = "Flota cerrada.";
+      sub = "Esperando al rival…";
+    }
+    const a = box.firstElementChild, b = box.lastElementChild;
+    if (a.textContent !== main) a.textContent = main;
+    if (b.textContent !== sub) b.textContent = sub;
+    box.classList.toggle("hidden", !main);
   }
 
   function roundRect(x, y, w, h, r) {
@@ -1245,7 +1278,6 @@
         drawHull(g, ghost, 0.92, issue ? "#f87171" : "#4ade80");
         if (issue) {
           drawIllegalMarks(g, ghost);
-          drawIssueBanner(g, ISSUE_BANNER[issue] || "NO ENTRA");
         }
       }
     } else {
@@ -1784,6 +1816,8 @@
       pattern: null,
       stats: { shots: 0, hits: 0, misses: 0, sunk: 0, taken: 0, lost: 0, turns: 0, man: 0, picks: 0, t0: 0, t1: 0 }
     };
+    // Colocación unidad por unidad: nada arranca puesto (las unidades "levantadas" no cuentan en el tablero).
+    local.forEach((u) => { u.unplaced = true; u.lifted = true; u.horizontal = true; });
     match.side = C.newSide(local);
     match.hitsOnLocal = match.side.hits;
     match.meP = { side: match.side, know: match.know, pers: null, consec: 0 };
@@ -1813,13 +1847,16 @@
     sealed = false;
     battleStarted = false;
     hand = null;
+    preview = null;
+    placeNote = "";
     hudDirty = true;
     ui.linkbox.classList.add("hidden");
     ui.ready.disabled = false;
     ui.ready.textContent = "Estoy listo";
+    nextHand();
     say(opts.mode === "pvp"
-      ? "60 segundos. Estoy listo cierra tu flota. Empieza cuando los dos están listos, o al llegar a 0."
-      : "60 segundos para mover la flota. Estoy listo empieza ya.");
+      ? "60 segundos. Colocá tu flota unidad por unidad; empieza cuando los dos están listos, o al llegar a 0."
+      : "60 segundos para colocar tu flota, unidad por unidad. Lo que falte se completa solo.");
     startClock();
     requestAnimationFrame(fit);
   }
@@ -1842,6 +1879,7 @@
       }
       ui.clock.textContent = String(clockLeft);
       ui.clock.classList.toggle("urgent", clockLeft <= 10);
+      if (match && match.phase === "place") hudDirty = true;
     }, 1000);
   }
   function stopClock() {
@@ -1854,6 +1892,7 @@
   function sealFleet() {
     if (sealed) return;
     settleHand();
+    autoFill();
     sealed = true;
     localReady = true;
     if (match && (match.phase === "place" || match.phase === "lobby")) match.phase = "sealed";
@@ -1944,9 +1983,64 @@
     hand.ship.x = hand.ox;
     hand.ship.y = hand.oy;
     hand.ship.horizontal = hand.oh;
-    hand.ship.lifted = false;
+    hand.ship.lifted = !!hand.ship.unplaced;
     hand = null;
     preview = null;
+  }
+
+  // --- colocación secuencial ---
+  function nextHand() {
+    if (!match || match.phase !== "place" || sealed || hand) return;
+    const ship = match.local.find((u) => u.unplaced);
+    if (!ship) { hudDirty = true; return; }
+    hand = { ship, ox: ship.x, oy: ship.y, oh: true, horizontal: ship.horizontal !== false, grabDx: 0, grabDy: 0 };
+    ship.lifted = true;
+    preview = null;
+    lastPlaceTag = "";
+    hudDirty = true;
+  }
+  function autoFill() {
+    if (!match) return;
+    if (!match.local.some((u) => u.unplaced)) return;
+    if (!C.placeRemaining(match.local, opts.terrain, Math.random, opts.map, opts.crop)) {
+      // hueco imposible con lo que puso el jugador: se rearma todo al azar
+      const fresh = C.placeRandom(opts.terrain, Math.random, opts.map, opts.crop);
+      match.local.forEach((u) => {
+        const f = fresh.find((q) => q.id === u.id);
+        u.x = f.x; u.y = f.y; u.horizontal = f.horizontal; u.unplaced = false; u.lifted = false;
+      });
+    }
+    hand = null;
+    preview = null;
+    hudDirty = true;
+  }
+  function placedAll() { return !!match && match.local.every((u) => !u.unplaced); }
+  function flashNote(text) {
+    placeNote = text;
+    clearTimeout(placeNoteT);
+    placeNoteT = setTimeout(() => { placeNote = ""; hudDirty = true; }, 2200);
+    hudDirty = true;
+  }
+  function rotateHand() {
+    if (!hand) return false;
+    hand.horizontal = !hand.horizontal;
+    hand.grabDx = 0;
+    hand.grabDy = 0;
+    const issue = preview ? handIssue(preview.x, preview.y) : "";
+    if (issue) flashNote(ISSUE_TEXT[issue] || "Ahí no entra.");
+    say(issue ? ISSUE_TEXT[issue] : (hand.horizontal ? "Horizontal. " : "Vertical. ") + hand.ship.name + ". Verde entra, rojo no.");
+    try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) { /* sin vibración */ }
+    blip();
+    hudDirty = true;
+    return true;
+  }
+  function clearPress() { clearTimeout(pressT); pressT = 0; }
+  function armPress() {
+    clearPress();
+    pressT = setTimeout(() => {
+      pressT = 0;
+      if (dragging && hand && !moved && rotateHand()) pressRot = true;
+    }, 460);
   }
 
   function handIssue(x, y) {
@@ -1964,6 +2058,7 @@
       hand.ship.y = preview.y;
       hand.ship.horizontal = hand.horizontal;
       hand.ship.lifted = false;
+      hand.ship.unplaced = false;
       hand = null;
       preview = null;
       return;
@@ -1994,18 +2089,25 @@
     const issue = handIssue(cell.x, cell.y);
     if (issue) {
       say(ISSUE_TEXT[issue] || "Ahí no entra.");
+      flashNote(ISSUE_TEXT[issue] || "Ahí no entra.");
       trauma = Math.min(1, trauma + 0.45);
       hudDirty = true;
       return;
     }
+    const wasNew = !!hand.ship.unplaced;
     hand.ship.x = cell.x;
     hand.ship.y = cell.y;
     hand.ship.horizontal = hand.horizontal;
     hand.ship.lifted = false;
+    hand.ship.unplaced = false;
     hand = null;
     preview = null;
+    placeNote = "";
     hudDirty = true;
-    say("Reacomodada. Quedan " + Math.max(0, clockLeft) + "s, o tocá Estoy listo.");
+    blip();
+    nextHand();
+    if (placedAll()) say("Flota completa. Tocá una unidad para moverla o Estoy listo.");
+    else say(wasNew ? "Apoyada. Seguimos." : "Reacomodada.");
   }
 
   function onPointerDown(e) {
@@ -2015,6 +2117,8 @@
       const cell = cellFromEvent(e, !!hand);
       if (!cell) return;
       e.preventDefault();
+      if (e.button === 2) { rotateHand(); return; }
+      pressRot = false;
       if (hand) {
         gestureHeld = true;
         dragging = true;
@@ -2022,6 +2126,7 @@
         hand.grabDx = 0;
         hand.grabDy = 0;
         preview = { x: cell.x, y: cell.y };
+        armPress();
         return;
       }
       if (!C.inBounds(cell.x, cell.y)) return;
@@ -2031,6 +2136,7 @@
       gestureHeld = false;
       dragging = true;
       moved = false;
+      armPress();
       return;
     }
     const cell = cellFromEvent(e);
@@ -2085,9 +2191,13 @@
       preview = cell;
       return;
     }
+    if (placing && !dragging && cell && e.pointerType === "mouse") {
+      preview = { x: cell.x - hand.grabDx, y: cell.y - hand.grabDy };
+      return;
+    }
     if (!dragging || !hand || !cell) return;
     const origin = { x: cell.x - hand.grabDx, y: cell.y - hand.grabDy };
-    if (!preview || origin.x !== preview.x || origin.y !== preview.y) moved = true;
+    if (!preview || origin.x !== preview.x || origin.y !== preview.y) { moved = true; pressRot = false; clearPress(); }
     preview = origin;
     const issue = handIssue(origin.x, origin.y);
     const tag = issue || "ok";
@@ -2098,9 +2208,11 @@
   }
 
   function onPointerUp() {
+    clearPress();
     if (!dragging) return;
     dragging = false;
     if (!hand) return;
+    if (pressRot) { pressRot = false; return; }
     if ((gestureHeld || moved) && preview) tryDrop(preview);
   }
 
@@ -2899,17 +3011,9 @@
       say("Seleccioná el enlace y copialo.");
     }
   });
-  ui.rotate.addEventListener("click", () => {
-    if (!hand) {
-      say("Primero levantá una unidad tocándola.");
-      return;
-    }
-    hand.horizontal = !hand.horizontal;
-    hand.grabDx = 0;
-    hand.grabDy = 0;
-    const issue = preview ? handIssue(preview.x, preview.y) : "";
-    say(issue ? ISSUE_TEXT[issue] : (hand.horizontal ? "Horizontal. " : "Vertical. ") + hand.ship.name + ". Verde entra, rojo no.");
-    blip();
+  ui.rotate.addEventListener("click", () => { if (!rotateHand()) say("Primero levantá una unidad tocándola."); });
+  window.addEventListener("keydown", (e) => {
+    if ((e.key === "r" || e.key === "R") && match && match.phase === "place" && hand) rotateHand();
   });
   ui.ready.addEventListener("click", () => markReady());
   ui.shoot.addEventListener("click", () => {
@@ -3029,6 +3133,7 @@
   window.__parquesState = () => match ? ({
     phase: match.phase,
     view: viewKind(),
+    place: { unplaced: match.local.filter((s) => s.unplaced).length, next: (match.local.find((s) => s.unplaced) || {}).name || null, handH: hand ? hand.horizontal : null, hasHand: !!hand, msg: (document.getElementById("place-msg") || {}).textContent || "" },
     ships: match.local.map((s) => s.name + (s.lifted ? "*" : "")).join(","),
     units: match.local.map((s) => ({ name: s.name, kind: s.kind, x: s.x, y: s.y, size: s.size, horizontal: s.horizontal, lifted: !!s.lifted })),
     lifted: !!hand,
