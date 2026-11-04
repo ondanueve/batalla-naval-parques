@@ -1145,8 +1145,10 @@
     hudDirty = true;
     if (opts.mode === "pvc") {
       const res = C.resolveShots(match.remote, match.hitsOnRemote, shots, false);
+      const m = match;
       rememberRemote(res.results);
       await playResults(res.results, false);
+      if (match !== m) return;
       if (res.lost) return finish(true);
       await enemyStrike();
       return;
@@ -1177,16 +1179,20 @@
   }
 
   async function enemyStrike() {
+    const m = match;
+    if (!m) return;
     match.phase = "defend";
     ui.stage.classList.add("under-fire");
     hudDirty = true;
     say("El invasor apunta a tu parque…");
     await WAIT(420);
+    if (match !== m) return; // user left to the menu while the AI was "thinking"
     const shot = C.aiShot(match.local, match.hitsOnLocal, Math.random);
     if (!shot) return finish(true);
     const res = C.resolveShots(match.local, match.hitsOnLocal, [shot], match.shield);
     if (res.shielded) match.shield = false;
     await playResults(res.results, true);
+    if (match !== m) return;
     if (res.lost) return finish(false);
     match.phase = "attack";
     hudDirty = true;
@@ -1195,11 +1201,13 @@
 
   async function handleFire(msg) {
     if (!match) return;
+    const m = match;
     match.phase = "defend";
     hudDirty = true;
     const res = C.resolveShots(match.local, match.hitsOnLocal, msg.shots || [], match.shield);
     if (res.shielded) match.shield = false;
     await playResults(res.results, true);
+    if (match !== m) return;
     send({ t: "resolved", results: enrich(res.results), hpLeft: res.hp.left, lost: res.lost });
     if (res.lost) return finish(false);
     match.phase = "attack";
@@ -1209,9 +1217,11 @@
 
   async function handleResolved(msg) {
     if (!match) return;
+    const m = match;
     remoteLeft = typeof msg.hpLeft === "number" ? msg.hpLeft : remoteLeft;
     rememberRemote(msg.results || []);
     await playResults(msg.results || [], false);
+    if (match !== m) return;
     if (msg.lost) return finish(true);
     match.phase = "defend";
     hudDirty = true;
@@ -1223,9 +1233,12 @@
     match.phase = "end";
     stopClock();
     hudDirty = true;
-    ui.endTitle.textContent = win ? "El parque sigue siendo argentino." : "El invasor tomó el territorio.";
+    // "win" is from the local player's side; the joiner plays the invader (role "inv"),
+    // so the Argentine-flavored headline must be flipped for them.
+    const argentinaHolds = match.role === "inv" ? !win : win;
+    ui.endTitle.textContent = argentinaHolds ? "El parque sigue siendo argentino." : "El invasor tomó el territorio.";
     ui.end.classList.remove("hidden");
-    say(win ? "No queda nada del invasor." : "Perdiste la flota.");
+    say(win ? (match.role === "inv" ? "Tomaste el territorio. No queda nada de la defensa." : "No queda nada del invasor.") : "Perdiste la flota.");
     ui.stage.classList.remove("under-fire");
     if (win) { const j = juke(); if (j) j.sfx.sunk(); }
   }
