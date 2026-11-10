@@ -24,14 +24,18 @@ export async function setup(p, { map='nahuel', terrain='agua', mode='pvc', natio
 }
 export async function cellXY(p, x, y) {
   const r = await p.evaluate(() => { const c = document.getElementById('board').getBoundingClientRect(); return { l: c.left, t: c.top, w: c.width, h: c.height }; });
+  const DOCK = 46; // franja reservada abajo (game.js)
   const rot = r.w / r.h > 1.2;
-  const vw = rot ? r.h : r.w, vh = rot ? r.w : r.h;
-  const aspect = vw / vh;
-  const gw = aspect <= 0.62 || rot ? vw : Math.min(vw, vh * 0.5 * 1.6);
-  const ox = (vw - gw) / 2, cw = gw / 10, ch = vh / 20;
-  const vx = ox + (x + .5) * cw, vy = (y + .5) * ch;
-  // girado: pantalla = (vy, alto - vx)
-  return rot ? { x: r.l + vy, y: r.t + r.h - vx } : { x: r.l + vx, y: r.t + vy };
+  let vx, vy;
+  if (rot) {
+    const cw = (r.h - DOCK) / 10, ch = r.w / 20;
+    vx = DOCK + (x + .5) * cw; vy = (y + .5) * ch;
+    return { x: r.l + vy, y: r.t + r.h - vx }; // girado: pantalla = (vy, alto - vx)
+  }
+  const bh = r.h - DOCK, aspect = r.w / bh;
+  const gw = aspect <= 0.62 ? r.w : Math.min(r.w, bh * 0.5 * 1.6);
+  const ox = (r.w - gw) / 2;
+  return { x: r.l + ox + (x + .5) * gw / 10, y: r.t + (y + .5) * bh / 20 };
 }
 export async function clickCell(p, x, y) { const c = await cellXY(p, x, y); await p.mouse.click(c.x, c.y); }
 export const dlg = (p) => p.textContent('#dialogue');

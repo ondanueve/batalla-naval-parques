@@ -351,26 +351,33 @@
   const ROT_ASPECT = 1.2;
   let rotView = false;
   function isRot(cw, ch) { return cw / Math.max(1, ch) > ROT_ASPECT; }
-  function geomCss(cw, ch) {
-    const aspect = cw / Math.max(1, ch);
-    let gw;
-    if (aspect <= 0.62) gw = cw;
-    else if (rotView) gw = cw;
-    else gw = Math.min(cw, ch * (C.W / C.H) * 1.6);
-    return { ox: (cw - gw) / 2, oy: 0, cellW: gw / C.W, cellH: ch / C.H };
+  // Franja inferior reservada (en px CSS) para Disparar/Maniobrar: así ningún botón tapa celdas.
+  const DOCK = 46;
+  // cw/ch: tamaño del lienzo virtual (vertical); unit: px de dispositivo por px CSS; rot: tablero girado.
+  function geomCss(cw, ch, unit, rot) {
+    const dock = DOCK * (unit || 1);
+    if (rot) {
+      // girado: el borde de abajo de la pantalla es el izquierdo del lienzo virtual
+      const gw = Math.max(10, cw - dock);
+      return { ox: dock, oy: 0, cellW: gw / C.W, cellH: ch / C.H };
+    }
+    const bh = Math.max(20, ch - dock);
+    const aspect = cw / bh;
+    const gw = aspect <= 0.62 ? cw : Math.min(cw, bh * (C.W / C.H) * 1.6);
+    return { ox: (cw - gw) / 2, oy: 0, cellW: gw / C.W, cellH: bh / C.H };
   }
 
   function gridGeom() {
     const dpr = ui.canvas.width / Math.max(1, ui.canvas.clientWidth || ui.canvas.width);
     rotView = isRot(ui.canvas.width, ui.canvas.height);
-    const k = rotView ? geomCss(ui.canvas.height, ui.canvas.width) : geomCss(ui.canvas.width, ui.canvas.height);
+    const k = rotView ? geomCss(ui.canvas.height, ui.canvas.width, dpr, true) : geomCss(ui.canvas.width, ui.canvas.height, dpr, false);
     return { dpr, padL: k.ox, padT: k.oy, cellW: k.cellW, cellH: k.cellH };
   }
 
   function cellFromEvent(e, loose) {
     const r = ui.canvas.getBoundingClientRect();
     const rot = isRot(r.width, r.height);
-    const k = rot ? geomCss(r.height, r.width) : geomCss(r.width, r.height);
+    const k = rot ? geomCss(r.height, r.width, 1, true) : geomCss(r.width, r.height, 1, false);
     if (k.cellW <= 0 || k.cellH <= 0) return null;
     let px = e.clientX - r.left;
     let py = e.clientY - r.top;
@@ -712,7 +719,7 @@
     const gw = g.cellW * C.W;
     const gh = g.cellH * C.H;
     const img = parkImage();
-    if (img && img.complete && img.naturalWidth && (g.padL > 1 || g.padT > 1)) drawBackdrop(img, rotView ? h : w, rotView ? w : h);
+    if (img && img.complete && img.naturalWidth) drawBackdrop(img, rotView ? h : w, rotView ? w : h);
     if (img && img.complete && img.naturalWidth) {
       ctx.drawImage(vividMap(img, gw, gh), g.padL, g.padT, gw, gh);
       if (!reduceMotion) {
