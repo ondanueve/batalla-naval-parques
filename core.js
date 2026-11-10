@@ -348,6 +348,7 @@
   /* perillas de la IA (ajustadas con tools/sim.js para que las 3 personalidades ganen parejo) */
   const AI_TUNE = {
     lineSense: 0.85,
+    hardAim: 0.5,
     agresivo: { aim: 0.35, move: 0.55, moveMin: 4.1, repair: 0.03 },
     cauto: { repair: 0.6, dodge: 0.8, watch: 0.8, aim: 0.85, grab: 0.6, grabMin: 4.1 },
     oportunista: { moveMin: 4.45, aim: 0.2, repair: 0.3, watch: 0.2 }
@@ -612,6 +613,59 @@
     }
   }
 
+  /* IA difícil: mapa de probabilidad. Cuenta en cuántas posiciones legales (terreno + lo que ya sabe)
+     podría estar cada unidad de la flota rival (misma composición que la propia: es info pública).
+     No mira nada oculto. */
+  function densityTarget(env, rng) {
+    const { know, shared, who } = env;
+    const heat = densityHeat(env);
+    let best = null, bw = -1;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const m = know.marks.get(key(x, y));
+        if (m && !isStale(shared, who, m)) continue;
+        if (m && m.kind === "sunk") continue;
+        const v = heat[y * W + x] * (1 + rng() * 0.08);
+        if (v > bw) { bw = v; best = { x, y }; }
+      }
+    }
+    return best;
+  }
+  function densityHeat(env) {
+    const { know, shared, who, side } = env;
+    if (!shared._fit) shared._fit = {};
+    const blocked = (x, y) => {
+      const m = know.marks.get(key(x, y));
+      if (!m) return 0;
+      if (m.kind === "sunk") return 1;
+      if (m.kind === "miss") return isStale(shared, who, m) ? 0.5 : 1;
+      return 0;
+    };
+    const heat = new Float32Array(W * H);
+    side.fleet.forEach((u) => {
+      [true, false].forEach((hz) => {
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            const fk = u.kind + u.size + (hz ? "h" : "v") + x + "," + y;
+            if (shared._fit[fk] === undefined) shared._fit[fk] = placeIssue([], x, y, u.size, hz, null, u.kind, shared.terrain, shared.map, shared.crop) === "";
+            if (!shared._fit[fk]) continue;
+            let w = 1, hits = 0;
+            for (let i = 0; i < u.size && w > 0; i++) {
+              const cx = hz ? x + i : x, cy = hz ? y : y + i;
+              w *= 1 - blocked(cx, cy);
+              const m = know.marks.get(key(cx, cy));
+              if (m && m.kind === "hit" && !isStale(shared, who, m)) hits++;
+            }
+            w *= 1 + 4 * hits;
+            if (w <= 0) continue;
+            for (let i = 0; i < u.size; i++) heat[(hz ? y : y + i) * W + (hz ? x + i : x)] += w;
+          }
+        }
+      });
+    });
+    return heat;
+  }
+
   /* ---------- IA con conocimiento propio ---------- */
   function shotTarget(env, rng) {
     const { know, shared, who } = env;
@@ -640,13 +694,21 @@
       const isHit = (x, y) => { const m = know.marks.get(key(x, y)); return m && m.kind === "hit"; };
       const lined = hunt.filter((c) => [[1, 0], [0, 1]].some(([dx, dy]) =>
         (isHit(c.x + dx, c.y + dy) && isHit(c.x + 2 * dx, c.y + 2 * dy)) || (isHit(c.x - dx, c.y - dy) && isHit(c.x - 2 * dx, c.y - 2 * dy))));
-      const pool = lined.length && rng() < AI_TUNE.lineSense ? lined : hunt;
+      const pool = lined.length && (env.hard || rng() < AI_TUNE.lineSense) ? lined : hunt;
+      if (env.hard) {
+        // difícil: entre los candidatos, el que más posiciones de flota explica
+        const heat = densityHeat(env);
+        let best = pool[0], bw = -1;
+        pool.forEach((c) => { const v = heat[c.y * W + c.x] * (1 + rng() * 0.05); if (v > bw) { bw = v; best = c; } });
+        return best;
+      }
       return pool[Math.floor(rng() * pool.length)];
     }
     // 3) marcas viejas de impacto: ir a confirmar
     const stale = [];
     know.marks.forEach((m, k) => { if (m.kind === "hit" && isStale(shared, who, m)) { const [x, y] = k.split(",").map(Number); stale.push({ x, y }); } });
     if (stale.length && rng() < 0.6) return stale[Math.floor(rng() * stale.length)];
+    if (env.hard) { const d = densityTarget(env, rng); if (d) return d; }
     // 4) paridad sobre lo no marcado (o marcado viejo)
     const open = [];
     for (let y = 0; y < H; y++) {
@@ -696,6 +758,8 @@
     const roll = rng();
     const dmgUnits = repairable(side);
     const T = AI_TUNE[pers] || AI_TUNE.agresivo;
+    // difícil: con un impacto fresco y sin carga, cargar la cruz antes de rematar
+    if (env.hard && can("apuntar") && side.charge < 1 && hasFreshHit && rng() < AI_TUNE.hardAim) return { t: "aim" };
     if (pers === "cauto") {
       if (can("reparar") && dmgUnits.length && roll < T.repair) {
         dmgUnits.sort((a, b) => shipStatus(b, side.hits).dmg / b.size - shipStatus(a, side.hits).dmg / a.size);
@@ -745,8 +809,8 @@
     return {
       shared,
       p: {
-        arg: { side: newSide(mk()), know: newKnow(), pers: o.persArg || "oportunista", consec: 0 },
-        inv: { side: newSide(mk()), know: newKnow(), pers: o.persInv || "agresivo", consec: 0 }
+        arg: { side: newSide(mk()), know: newKnow(), pers: o.persArg || "oportunista", consec: 0, hard: !!o.hardArg },
+        inv: { side: newSide(mk()), know: newKnow(), pers: o.persInv || "agresivo", consec: 0, hard: !!o.hardInv }
       }
     };
   }
@@ -805,14 +869,14 @@
     const stats = { man: { arg: 0, inv: 0 }, shot: { arg: 0, inv: 0 } };
     for (let guard = 0; guard < 600; guard++) {
       const me = world.p[who];
-      const env = { side: me.side, shared: world.shared, who, pers: me.pers, consec: me.consec, know: me.know };
+      const env = { side: me.side, shared: world.shared, who, pers: me.pers, consec: me.consec, know: me.know, hard: me.hard };
       let act = aiChoose(env, rng);
       let out = execAction(world, who, act);
       stats[act.t === "shot" ? "shot" : "man"][who]++;
       if (out.lost) return { winner: who, turns: world.shared.turnNo, level: warLevel(world.shared), stats };
       if (me.side.init > 0 && world.shared.turnNo < me.side.initUntil) {
         me.side.init = 0;
-        const env2 = { side: me.side, shared: world.shared, who, pers: me.pers, consec: me.consec, know: me.know };
+        const env2 = { side: me.side, shared: world.shared, who, pers: me.pers, consec: me.consec, know: me.know, hard: me.hard };
         act = aiChoose(env2, rng);
         out = execAction(world, who, act);
         stats[act.t === "shot" ? "shot" : "man"][who]++;
@@ -837,6 +901,6 @@
     PICKUPS, MANEUVERS, PERSONALITIES, PERS_LABEL, WAR_NAMES, other, newSide, newKnow, newShared, newWorld,
     warLevel, roundOf, roundsToNextLevel, maneuverAllowed, inZone, zonesOf, addWatch, spottedCells, noteSpot,
     noteResults, isStale, shotCells, resolveVolley, moveOptions, translateUnit, collectUnder, applyPublicCollect,
-    repairable, applyRepair, AI_TUNE, applyAim, expireSide, advance, shotTarget, aiChoose, refreshVision, execAction, simulate
+    repairable, applyRepair, AI_TUNE, applyAim, expireSide, advance, shotTarget, densityTarget, aiChoose, refreshVision, execAction, simulate
   };
 });
