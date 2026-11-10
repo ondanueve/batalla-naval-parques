@@ -6,6 +6,7 @@ export async function playGame(p, tag, o = {}) {
   const rnd = o.rnd || Math.random;
   const stats = { shots: 0, repeat: 0, mover: 0, vigilar: 0, reparar: 0, apuntar: 0, init: 0, blocked: 0, notes: [], levels: new Set() };
   const hitCells = [];
+  const tried = new Set();
   const t0 = Date.now();
   let lastHp = null, guard = 0;
   while (!(await ended(p))) {
@@ -58,8 +59,13 @@ export async function playGame(p, tag, o = {}) {
     // disparar
     await fold(p, true);
     let c;
-    if (hitCells.length && rnd() < 0.4) { c = hitCells[Math.floor(rnd() * hitCells.length)]; stats.repeat++; }
-    else c = { x: Math.floor(rnd() * 10), y: Math.floor(rnd() * 20) };
+    const fresh = (q) => q.x >= 0 && q.y >= 0 && q.x < 10 && q.y < 20 && !tried.has(q.x + ',' + q.y);
+    const near = hitCells.flatMap((h) => [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, d]) => ({ x: h.x + a, y: h.y + d }))).filter(fresh);
+    if (hitCells.length && rnd() < 0.15) { c = hitCells[Math.floor(rnd() * hitCells.length)]; stats.repeat++; }
+    else if (near.length) c = near[Math.floor(rnd() * near.length)];
+    else { let n = 0; do { c = { x: Math.floor(rnd() * 10), y: Math.floor(rnd() * 20) }; } while (n++ < 60 && (!fresh(c) || (c.x + c.y) % 2)); }
+    tried.add(c.x + ',' + c.y);
+    if (tried.size > 120) tried.clear();
     const before = s.foeHp;
     await clickCell(p, c.x, c.y);
     stats.shots++;
