@@ -500,6 +500,8 @@
     ui.shoot.setAttribute("aria-pressed", myTurn && sel.mode === "shoot" ? "true" : "false");
     ui.dev.setAttribute("aria-pressed", myTurn && sel.open ? "true" : "false");
     ui.dev.querySelector("small").textContent = anyOk ? "Rinde después" : (lvl >= 3 ? "Ya no hay" : "Tope seguido");
+    const boosted = myTurn && ((side.charge > 0 && sh.turnNo < side.chargeUntil) || lvl >= 2);
+    ui.shoot.classList.toggle("boost", !!boosted);
     ui.shoot.querySelector("small").textContent = side.charge > 0 && sh.turnNo < side.chargeUntil ? (side.charge >= 2 ? "Área 3×3" : "En cruz") : lvl >= 3 ? "Área 3×3" : lvl >= 2 ? "En cruz" : "Daño ahora";
     const open = myTurn && sel.open && lvl < 3;
     const picking = myTurn && (sel.mode === "move" || sel.mode === "repair" || sel.mode === "watch");
@@ -523,7 +525,15 @@
     const fighting = !!match && (match.phase === "attack" || match.phase === "defend" || match.phase === "resolving");
     if (document.body.classList.contains("in-battle") !== fighting) {
       document.body.classList.toggle("in-battle", fighting);
-      if (fighting) setOpen(false);
+      if (fighting) {
+        setOpen(false);
+        // primera batalla: la píldora late un rato para que se descubra que se abre
+        if (!store.get("parques.pill.v1")) {
+          const pl = document.getElementById("hud-pill");
+          pl.classList.add("hint");
+          setTimeout(() => pl.classList.remove("hint"), 9000);
+        }
+      }
     }
     document.getElementById("hud-pill").classList.toggle("hidden", !fighting);
     const placingNow = !!match && (match.phase === "place" || match.phase === "sealed");
@@ -733,6 +743,23 @@
           ctx.fillRect(px - r, py - r * 0.3, r * 2, r * 0.6);
           ctx.fillRect(px - r * 0.3, py - r, r * 0.6, r * 2);
         });
+        // sombras de nubes que cruzan el parque despacio
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "multiply";
+        for (let k = 0; k < 3; k++) {
+          const u = ((time / 70000 + k * 0.41) % 1.5) - 0.25;
+          const cx = g.padL + u * gw;
+          const cy = g.padT + gh * (0.18 + 0.32 * k) + Math.sin(time / 9000 + k * 2) * gh * 0.04;
+          const rr = gw * (0.38 + 0.08 * k);
+          const cg = ctx.createRadialGradient(cx, cy, rr * 0.15, cx, cy, rr);
+          cg.addColorStop(0, "rgba(40,52,80,.28)");
+          cg.addColorStop(1, "rgba(40,52,80,0)");
+          ctx.fillStyle = cg;
+          ctx.save();
+          ctx.translate(cx, cy); ctx.scale(1.5, 0.75); ctx.translate(-cx, -cy);
+          ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
         ctx.restore();
       }
     } else {
@@ -1776,6 +1803,24 @@
     floats.push({ x: c.x, y: c.y, vy: -30 * g.dpr, life: 1, color: "#fde68a", text, size: 12 });
   }
 
+  // racha: disparos seguidos que dan en algo nuevo (las maniobras no la cortan, un agua sí)
+  function floatAt(x, y, text, color, size) {
+    const g = gridGeom();
+    const c = cellCenter(g, x, y);
+    floats.push({ x: c.x, y: c.y, vy: -24 * g.dpr, life: 1.3, color, text, size });
+  }
+  function fxStreak(x, y, n) {
+    const g = gridGeom();
+    const c = cellCenter(g, x, y);
+    const hot = n >= 4 ? "#f472b6" : n >= 3 ? "#fb923c" : "#fde047";
+    const up = rotView ? { x: g.cellW * 0.9, y: 0 } : { x: 0, y: -g.cellH * 0.9 };
+    floats.push({ x: c.x + up.x, y: c.y + up.y, vy: -34 * g.dpr, life: 1.6, color: hot, text: "RACHA ×" + n, size: 14 + Math.min(4, n) * 3 });
+    rings.push({ x, y, life: 1, color: hot, size: 1.2 + n * 0.35, w: 2 + n, delay: 0.12 });
+    trauma = Math.min(1, trauma + 0.08 * n);
+    const j = juke();
+    if (j && j.sfx.streak) j.sfx.streak(n);
+  }
+
   async function playResults(results, incoming, pattern) {
     viewOverride = incoming ? "local" : "remote";
     hudDirty = true;
@@ -1823,6 +1868,17 @@
         if (j) j.sfx.miss();
       }
       if (i < results.length - 1) await WAIT(incoming ? 200 : 120);
+    }
+    if (stt && !incoming) {
+      const fresh = results.filter((r) => (r.kind === "hit" && !r.again) || r.kind === "sunk");
+      if (fresh.length) {
+        stt.streak = (stt.streak || 0) + 1;
+        stt.bestStreak = Math.max(stt.bestStreak || 0, stt.streak);
+        if (stt.streak >= 2) fxStreak(fresh[0].x, fresh[0].y, stt.streak);
+      } else if (results.some((r) => r.kind === "miss")) {
+        if ((stt.streak || 0) >= 2) floatAt(results[0].x, results[0].y, "RACHA CORTADA", "#cbd5e1", 12);
+        stt.streak = 0;
+      }
     }
     say(narrate(results, incoming, pattern));
     hudDirty = true;
@@ -2618,7 +2674,7 @@
       "st-sunk": stt.sunk + "/" + (match.remote ? match.remote.length : fleet),
       "st-taken": stt.taken + "/17",
       "st-turns": stt.man,
-      "st-time": fmtTime((stt.t1 || Date.now()) - (stt.t0 || Date.now()))
+      "st-time": "×" + (stt.bestStreak || 0)
     };
     Object.keys(vals).forEach((id) => { document.getElementById(id).textContent = String(vals[id]); });
     document.getElementById("end-kicker").textContent = win ? "VICTORIA" : "DERROTA";
@@ -3107,7 +3163,12 @@
     pill.setAttribute("aria-expanded", on ? "true" : "false");
     pill.querySelector(".chev").textContent = on ? "▴" : "▾";
   }
-  document.getElementById("hud-pill").addEventListener("click", () => { setOpen(!document.body.classList.contains("hud-open")); blip(); });
+  document.getElementById("hud-pill").addEventListener("click", (e) => {
+    setOpen(!document.body.classList.contains("hud-open"));
+    e.currentTarget.classList.remove("hint");
+    store.set("parques.pill.v1", "1");
+    blip();
+  });
   const foldBtn = document.getElementById("hud-fold");
   function setFold(on) {
     document.body.classList.toggle("hud-fold", on);

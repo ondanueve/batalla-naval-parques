@@ -711,6 +711,12 @@ K:G
       setTimeout(() => tone(48, 0.5, "triangle", 0.2, 24), 60);
     },
     shield() { tone(880, 0.16, "triangle", 0.1, 1320); },
+    streak(n) {
+      // arpegio que sube con la racha
+      const base = [523, 587, 659, 784, 880, 1047];
+      const k = Math.min(base.length, Math.max(2, n));
+      for (let i = 0; i < k; i++) setTimeout(() => tone(base[i], 0.09, "triangle", 0.08), 260 + i * 55);
+    },
     alarm() {
       if (musicGain) {
         const now = musicGain.gain.value;
