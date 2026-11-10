@@ -61,6 +61,18 @@
   };
   if (!ui.canvas) return;
   const ctx = ui.canvas.getContext("2d");
+  // textos derechos aunque el tablero esté girado
+  ["fillText", "strokeText"].forEach((fn) => {
+    const orig = ctx[fn].bind(ctx);
+    ctx[fn] = function (t, x, y, mw) {
+      if (!rotView || !ctx.__inBoard) return mw === undefined ? orig(t, x, y) : orig(t, x, y, mw);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.PI / 2);
+      if (mw === undefined) orig(t, 0, 0); else orig(t, 0, 0, mw);
+      ctx.restore();
+    };
+  });
 
   const opts = { map: "nahuel", terrain: "agua", mode: "pvc", nation: "chile", crop: 0 };
   let match = null;
@@ -334,26 +346,37 @@
   // La grilla ocupa toda la pantalla. Si la pantalla es casi tan angosta como 1:2 se estira a lo ancho
   // (celdas apenas más altas); si es más ancha (escritorio) se centra a toda la altura y el parque se
   // extiende de fondo.
+  // Pantallas anchas (escritorio, celular acostado): el tablero se gira 90° y llena toda la pantalla.
+  // Todo se dibuja en un lienzo "virtual" vertical; los textos se contra-rotan para leerse derechos.
+  const ROT_ASPECT = 1.2;
+  let rotView = false;
+  function isRot(cw, ch) { return cw / Math.max(1, ch) > ROT_ASPECT; }
   function geomCss(cw, ch) {
     const aspect = cw / Math.max(1, ch);
     let gw;
     if (aspect <= 0.62) gw = cw;
+    else if (rotView) gw = cw;
     else gw = Math.min(cw, ch * (C.W / C.H) * 1.6);
     return { ox: (cw - gw) / 2, oy: 0, cellW: gw / C.W, cellH: ch / C.H };
   }
 
   function gridGeom() {
     const dpr = ui.canvas.width / Math.max(1, ui.canvas.clientWidth || ui.canvas.width);
-    const k = geomCss(ui.canvas.width, ui.canvas.height);
+    rotView = isRot(ui.canvas.width, ui.canvas.height);
+    const k = rotView ? geomCss(ui.canvas.height, ui.canvas.width) : geomCss(ui.canvas.width, ui.canvas.height);
     return { dpr, padL: k.ox, padT: k.oy, cellW: k.cellW, cellH: k.cellH };
   }
 
   function cellFromEvent(e, loose) {
     const r = ui.canvas.getBoundingClientRect();
-    const k = geomCss(r.width, r.height);
+    const rot = isRot(r.width, r.height);
+    const k = rot ? geomCss(r.height, r.width) : geomCss(r.width, r.height);
     if (k.cellW <= 0 || k.cellH <= 0) return null;
-    let x = Math.floor((e.clientX - r.left - k.ox) / k.cellW);
-    let y = Math.floor((e.clientY - r.top - k.oy) / k.cellH);
+    let px = e.clientX - r.left;
+    let py = e.clientY - r.top;
+    if (rot) { const vx = r.height - py; py = px; px = vx; }
+    let x = Math.floor((px - k.ox) / k.cellW);
+    let y = Math.floor((py - k.oy) / k.cellH);
     if (loose) {
       x = Math.max(-2, Math.min(C.W + 1, x));
       y = Math.max(-2, Math.min(C.H + 1, y));
@@ -667,6 +690,8 @@
     const ox = shake ? Math.sin(time / 17) * shake : 0;
     const oy = shake ? Math.cos(time / 23) * shake * 0.6 : 0;
     ctx.save();
+    if (rotView) { ctx.translate(0, h); ctx.rotate(-Math.PI / 2); }
+    ctx.__inBoard = true;
     ctx.translate(ox, oy);
     if (zoom.z > 0.002) {
       ctx.translate(zoom.x, zoom.y);
@@ -677,7 +702,7 @@
     const gw = g.cellW * C.W;
     const gh = g.cellH * C.H;
     const img = parkImage();
-    if (img && img.complete && img.naturalWidth && (g.padL > 1 || g.padT > 1)) drawBackdrop(img, w, h);
+    if (img && img.complete && img.naturalWidth && (g.padL > 1 || g.padT > 1)) drawBackdrop(img, rotView ? h : w, rotView ? w : h);
     if (img && img.complete && img.naturalWidth) {
       ctx.drawImage(vividMap(img, gw, gh), g.padL, g.padT, gw, gh);
       if (!reduceMotion) {
@@ -747,6 +772,7 @@
     if (match) drawPieces(g, time);
     drawFx(g);
     ctx.restore();
+    ctx.__inBoard = false;
     if (flashScreen > 0.01) {
       ctx.fillStyle = "rgba(255,236,200," + (flashScreen * 0.42).toFixed(3) + ")";
       ctx.fillRect(0, 0, w, h);
@@ -949,9 +975,12 @@
     ctx.textBaseline = "top";
     ctx.lineWidth = 3 * g.dpr;
     ctx.strokeStyle = "rgba(2,6,23,.85)";
-    ctx.strokeText(label, b.x + 4 * g.dpr, b.y + 3 * g.dpr);
+    // girado: la esquina sup-izq en pantalla es la sup-der del tablero virtual
+    const lx = rotView ? b.x + b.w - 3 * g.dpr : b.x + 4 * g.dpr;
+    const ly = rotView ? b.y + 4 * g.dpr : b.y + 3 * g.dpr;
+    ctx.strokeText(label, lx, ly);
     ctx.fillStyle = mine ? "#a5f3fc" : "#fed7aa";
-    ctx.fillText(label, b.x + 4 * g.dpr, b.y + 3 * g.dpr);
+    ctx.fillText(label, lx, ly);
     ctx.restore();
   }
 
@@ -1044,6 +1073,7 @@
       ctx.arc(c.x, c.y, r + 3 * g.dpr, 0, Math.PI * 2);
       ctx.stroke();
     }
+    if (rotView) { ctx.translate(c.x, c.y); ctx.rotate(Math.PI / 2); ctx.translate(-c.x, -c.y); }
     pickupIcon(p.type, c.x, c.y, r * 0.72, col);
     ctx.restore();
   }
@@ -1579,8 +1609,8 @@
         kind: o.kind,
         x: o.x + (Math.random() - 0.5) * (o.spread || 0),
         y: o.y + (Math.random() - 0.5) * (o.spread || 0),
-        vx: Math.cos(a) * sp,
-        vy: Math.sin(a) * sp,
+        vx: rotView ? -Math.sin(a) * sp : Math.cos(a) * sp,
+        vy: rotView ? Math.cos(a) * sp : Math.sin(a) * sp,
         r: o.r[0] + Math.random() * (o.r[1] - o.r[0]),
         grow: o.grow || 0,
         life: 1,
@@ -2935,7 +2965,8 @@
       parts.forEach((p) => {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
-        p.vy += (p.g === undefined ? 90 * (ui.canvas.width / 300) : p.g) * dt;
+        const grav = (p.g === undefined ? 90 * (Math.min(ui.canvas.width, ui.canvas.height) / 300) : p.g) * dt;
+        if (rotView) p.vx -= grav; else p.vy += grav;
         if (p.grow) p.r += p.grow * dt;
         p.life -= dt * (p.decay || 1.6);
       });
@@ -2947,7 +2978,7 @@
       flashes.forEach((f) => { f.life -= dt * 3.2; });
       flashes = flashes.filter((f) => f.life > 0);
       floats.forEach((f) => {
-        f.y += (f.vy || -30) * dt;
+        if (rotView) f.x -= (f.vy || -30) * dt; else f.y += (f.vy || -30) * dt;
         f.life -= dt * 0.8;
       });
       floats = floats.filter((f) => f.life > 0 && f.text);
