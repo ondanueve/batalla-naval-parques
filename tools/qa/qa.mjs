@@ -180,12 +180,14 @@ async function suitePvp() {
     console.log('DIAG host', JSON.stringify(rh.hang || rh.notes), '\nDIAG joiner', JSON.stringify(rj.hang || rj.notes));
     console.log('DIAG logs', clean(H.log), clean(J.log), await H.page.evaluate(() => window.__parquesErr), await J.page.evaluate(() => window.__parquesErr));
     console.log('DIAG phases', a.phase, c.phase, await H.page.evaluate(() => window.__parquesStage), await J.page.evaluate(() => window.__parquesStage));
+    console.log('STAGE', await H.page.evaluate(() => window.__parquesStage), await J.page.evaluate(() => window.__parquesStage));
     console.log('NET host\n' + (await H.page.evaluate(() => window.__parquesNet.join('\n'))));
     console.log('NET joiner\n' + (await J.page.evaluate(() => window.__parquesNet.join('\n'))));
     await b.close(); process.exit(1);
   }
   ok(JSON.stringify(a.pickups) === JSON.stringify(c.pickups), 'tesoros iguales en ambos');
-  await H.page.click('#rematch'); await wait(600); await J.page.click('#rematch'); await wait(2500);
+  const rem = (pg) => pg.evaluate(() => { document.getElementById('juke-panel')?.classList.add('hidden'); document.getElementById('rematch').click(); });
+  await rem(H.page); await wait(600); await rem(J.page); await wait(2500);
   ok((await st(H.page)).phase === 'place' && (await st(J.page)).place.unplaced === 5, 'revancha: se vuelve a colocar');
   await placeAll(H.page); await placeAll(J.page); await H.page.click('#ready'); await wait(800); await J.page.click('#ready'); await wait(2000);
   a = await st(H.page); c = await st(J.page);

@@ -1888,7 +1888,18 @@
 
   // los efectos nunca deben cortar el turno: si algo falla se registra y el juego sigue
   async function playResults(results, incoming, pattern) {
-    try { await playResultsFx(results, incoming, pattern); }
+    try {
+      // tope de tiempo: si la animación no termina, el turno sigue igual
+      let fin = false;
+      await Promise.race([playResultsFx(results, incoming, pattern).finally(() => { fin = true; }), WAIT(5000 + results.length * 450)]);
+      if (!fin) {
+        netLog.push("FX TIMEOUT " + (window.__parquesStage || ""));
+        console.warn("parques: animación cortada por tiempo");
+        ui.stage.classList.remove("under-fire");
+        viewOverride = null;
+        hudDirty = true;
+      }
+    }
     catch (err) {
       window.__parquesErr = String(err && err.stack || err);
       netLog.push("ERR fx " + String(err && err.message || err).slice(0, 80));
@@ -1945,6 +1956,7 @@
         fxMiss(r.x, r.y);
         if (j) j.sfx.miss();
       }
+      window.__parquesStage = "pr:" + i + "/" + results.length + " " + r.kind + " " + Math.round(performance.now() / 100) / 10;
       if (i < results.length - 1) await WAIT(incoming ? 200 : 120);
     }
     if (stt && !incoming) {
