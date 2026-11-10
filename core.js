@@ -345,6 +345,14 @@
   const PERSONALITIES = ["agresivo", "cauto", "oportunista"];
   const PERS_LABEL = { agresivo: "Agresivo", cauto: "Cauto", oportunista: "Oportunista" };
 
+  /* perillas de la IA (ajustadas con tools/sim.js para que las 3 personalidades ganen parejo) */
+  const AI_TUNE = {
+    lineSense: 0.85,
+    agresivo: { aim: 0.35, move: 0.55, moveMin: 4.1, repair: 0.03 },
+    cauto: { repair: 0.6, dodge: 0.8, watch: 0.8, aim: 0.85, grab: 0.6, grabMin: 4.1 },
+    oportunista: { moveMin: 4.45, aim: 0.2, repair: 0.3, watch: 0.2 }
+  };
+
   function other(who) { return who === "arg" ? "inv" : "arg"; }
 
   function newSide(fleet) {
@@ -627,7 +635,14 @@
         if (!mm || isStale(shared, who, mm)) hunt.push({ x: nx, y: ny });
       });
     });
-    if (hunt.length) return hunt[Math.floor(rng() * hunt.length)];
+    if (hunt.length) {
+      // si hay dos impactos en línea, seguir esa línea primero (se siente "inteligente")
+      const isHit = (x, y) => { const m = know.marks.get(key(x, y)); return m && m.kind === "hit"; };
+      const lined = hunt.filter((c) => [[1, 0], [0, 1]].some(([dx, dy]) =>
+        (isHit(c.x + dx, c.y + dy) && isHit(c.x + 2 * dx, c.y + 2 * dy)) || (isHit(c.x - dx, c.y - dy) && isHit(c.x - 2 * dx, c.y - 2 * dy))));
+      const pool = lined.length && rng() < AI_TUNE.lineSense ? lined : hunt;
+      return pool[Math.floor(rng() * pool.length)];
+    }
     // 3) marcas viejas de impacto: ir a confirmar
     const stale = [];
     know.marks.forEach((m, k) => { if (m.kind === "hit" && isStale(shared, who, m)) { const [x, y] = k.split(",").map(Number); stale.push({ x, y }); } });
@@ -680,40 +695,45 @@
     };
     const roll = rng();
     const dmgUnits = repairable(side);
+    const T = AI_TUNE[pers] || AI_TUNE.agresivo;
     if (pers === "cauto") {
-      if (can("reparar") && dmgUnits.length && roll < 0.6) {
+      if (can("reparar") && dmgUnits.length && roll < T.repair) {
         dmgUnits.sort((a, b) => shipStatus(b, side.hits).dmg / b.size - shipStatus(a, side.hits).dmg / a.size);
         return { t: "repair", unit: dmgUnits[0].id };
       }
-      if (can("mover") && alive.some(myZoneHit) && roll < 0.8) {
+      if (can("mover") && alive.some(myZoneHit) && roll < T.dodge) {
         const b = pickMove(false, true);
         if (b && b.score > 2) return { t: "move", unit: b.o.unit, dx: b.o.dx, dy: b.o.dy };
       }
-      if (can("reconocer") && !zonesOf(shared, who).length && roll < 0.8 && shared.turnNo > 2) {
+      if (can("mover") && roll < T.grab) {
+        const b = pickMove(true, false);
+        if (b && b.score > T.grabMin) return { t: "move", unit: b.o.unit, dx: b.o.dx, dy: b.o.dy };
+      }
+      if (can("reconocer") && !zonesOf(shared, who).length && roll < T.watch && shared.turnNo > 2) {
         const fresh = [];
         for (let y = 1; y < H - 1; y += 3) for (let x = 1; x < W - 1; x += 3) { const m = know.marks.get(key(x, y)); if (!m) fresh.push({ x, y }); }
-        if (fresh.length) return { t: "watch", x: fresh[Math.floor(rng() * fresh.length)].x, y: fresh[Math.floor(rng() * fresh.length)].y };
+        if (fresh.length) { const f = fresh[Math.floor(rng() * fresh.length)]; return { t: "watch", x: f.x, y: f.y }; }
       }
-      if (can("apuntar") && side.charge < 1 && hasFreshHit && roll < 0.85) return { t: "aim" };
+      if (can("apuntar") && side.charge < 1 && hasFreshHit && roll < T.aim) return { t: "aim" };
       return shoot();
     }
     if (pers === "oportunista") {
       if (can("mover")) {
         const b = pickMove(true, alive.some(myZoneHit));
-        if (b && b.score > 4.1) return { t: "move", unit: b.o.unit, dx: b.o.dx, dy: b.o.dy };
+        if (b && b.score > T.moveMin) return { t: "move", unit: b.o.unit, dx: b.o.dx, dy: b.o.dy };
       }
-      if (can("apuntar") && side.charge < 2 && hasFreshHit && roll < 0.2) return { t: "aim" };
-      if (can("reparar") && dmgUnits.length && roll < 0.3) return { t: "repair", unit: dmgUnits[0].id };
-      if (can("reconocer") && !zonesOf(shared, who).length && roll < 0.2 && shared.turnNo > 3) return { t: "watch", x: 1 + Math.floor(rng() * (W - 2)), y: 2 + Math.floor(rng() * (H - 4)) };
+      if (can("apuntar") && side.charge < 2 && hasFreshHit && roll < T.aim) return { t: "aim" };
+      if (can("reparar") && dmgUnits.length && roll < T.repair) return { t: "repair", unit: dmgUnits[0].id };
+      if (can("reconocer") && !zonesOf(shared, who).length && roll < T.watch && shared.turnNo > 3) return { t: "watch", x: 1 + Math.floor(rng() * (W - 2)), y: 2 + Math.floor(rng() * (H - 4)) };
       return shoot();
     }
     // agresivo
-    if (can("apuntar") && side.charge < 1 && hasFreshHit && roll < 0.35) return { t: "aim" };
-    if (can("mover") && roll < 0.1) {
+    if (can("apuntar") && side.charge < 1 && hasFreshHit && roll < T.aim) return { t: "aim" };
+    if (can("mover") && roll < T.move) {
       const b = pickMove(true, false);
-      if (b && b.score > 4.4) return { t: "move", unit: b.o.unit, dx: b.o.dx, dy: b.o.dy };
+      if (b && b.score > T.moveMin) return { t: "move", unit: b.o.unit, dx: b.o.dx, dy: b.o.dy };
     }
-    if (can("reparar") && dmgUnits.length && roll > 0.97) return { t: "repair", unit: dmgUnits[0].id };
+    if (can("reparar") && dmgUnits.length && roll > 1 - T.repair) return { t: "repair", unit: dmgUnits[0].id };
     return shoot();
   }
 
@@ -817,6 +837,6 @@
     PICKUPS, MANEUVERS, PERSONALITIES, PERS_LABEL, WAR_NAMES, other, newSide, newKnow, newShared, newWorld,
     warLevel, roundOf, roundsToNextLevel, maneuverAllowed, inZone, zonesOf, addWatch, spottedCells, noteSpot,
     noteResults, isStale, shotCells, resolveVolley, moveOptions, translateUnit, collectUnder, applyPublicCollect,
-    repairable, applyRepair, applyAim, expireSide, advance, shotTarget, aiChoose, refreshVision, execAction, simulate
+    repairable, applyRepair, AI_TUNE, applyAim, expireSide, advance, shotTarget, aiChoose, refreshVision, execAction, simulate
   };
 });

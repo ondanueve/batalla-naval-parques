@@ -2,11 +2,12 @@
 const C = require("../core.js");
 const N = Number(process.argv[2] || 300);
 const P = C.PERSONALITIES;
-const rng = C.mulberry32(20261104);
+const rng = C.mulberry32(Number(process.argv[3] || 20261104));
 const terr = ["agua", "tierra", "mixto"];
 const maps = ["nahuel", "iguazu", "glaciares"];
 let all = { n: 0, turns: 0, maxT: 0, stalled: 0, byLevel: [0, 0, 0, 0], argWins: 0 };
 const tbl = {};
+const wp = {}, gp = {}; P.forEach((p) => { wp[p] = 0; gp[p] = 0; });
 P.forEach((a) => P.forEach((b) => { tbl[a + " vs " + b] = { n: 0, aWins: 0, turns: 0, man: 0, shot: 0 }; }));
 for (let i = 0; i < N; i++) {
   const a = P[i % 3], b = P[Math.floor(i / 3) % 3];
@@ -16,6 +17,7 @@ for (let i = 0; i < N; i++) {
   const t = tbl[a + " vs " + b];
   t.n++; t.turns += r.turns; t.man += r.stats.man.arg + r.stats.man.inv; t.shot += r.stats.shot.arg + r.stats.shot.inv;
   if (r.winner === "arg") t.aWins++;
+  gp[a]++; gp[b]++; if (r.winner) wp[r.winner === "arg" ? a : b]++;
   all.n++; all.turns += r.turns; all.maxT = Math.max(all.maxT, r.turns); all.byLevel[r.level]++;
   if (!r.winner) all.stalled++;
   if (r.winner === "arg") all.argWins++;
@@ -27,3 +29,4 @@ Object.keys(tbl).forEach((k) => {
   if (!t.n) return;
   console.log(k.padEnd(26), "n=" + String(t.n).padEnd(4), "gana 1ro:", (100 * t.aWins / t.n).toFixed(0).padStart(3) + "%", "turnos:", (t.turns / t.n).toFixed(0).padStart(3), "maniobras:", (100 * t.man / (t.man + t.shot)).toFixed(0) + "%");
 });
+console.log("victorias por personalidad (todas sus partidas):", P.map((p) => p + " " + (100 * wp[p] / gp[p]).toFixed(0) + "%").join(" | "));
