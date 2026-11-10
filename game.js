@@ -459,9 +459,12 @@
     const myTurn = match.phase === "attack";
     const side = match.side;
     const pill = document.getElementById("hud-pill");
-    pill.className = "l" + lvl + (myTurn ? " mine" : "");
+    const hinting = pill.classList.contains("hint");
+    pill.className = "l" + lvl + (myTurn ? " mine" : "") + (hinting ? " hint" : "") + (lvl < 3 && left <= 1 ? " soon" : "");
     document.getElementById("pill-turn").textContent = myTurn ? "Tu turno" : match.phase === "defend" ? "Turno rival" : "Disparos…";
     document.getElementById("pill-war").textContent = C.WAR_NAMES[lvl];
+    // pronóstico de la escalada: cuánto falta para el próximo nivel
+    document.getElementById("pill-next").textContent = lvl >= 3 ? "" : "en " + plural(left, "ronda", "rondas") + ": " + C.WAR_NAMES[lvl + 1];
     document.getElementById("pill-hp").textContent = hpOf(match.local, match.hitsOnLocal).left + " vs " + foeHp().left;
     // pagos pendientes
     const chips = [];

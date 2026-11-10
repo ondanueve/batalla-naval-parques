@@ -1015,3 +1015,7 @@ body.in-battle:not(.hud-open) #turnbar .act.shoot.boost small { display: block; 
 @keyframes boostGlow { 50% { box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.4), 0 0 22px rgba(251, 146, 60, 0.8); } }
 #hud-pill.hint { opacity: 1; animation: pillHint 1.1s ease-in-out infinite; }
 @keyframes pillHint { 50% { box-shadow: 0 0 0 3px rgba(253, 224, 71, 0.55), 0 0 16px rgba(253, 224, 71, 0.6); } }
+#hud-pill small { font-size: 0.6rem; font-weight: 700; opacity: 0.7; }
+#hud-pill small:empty { display: none; }
+#hud-pill small::before { content: "· "; opacity: 0.6; }
+#hud-pill.soon small { opacity: 1; color: #fde047; }
