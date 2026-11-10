@@ -70,7 +70,7 @@ export async function playGame(p, tag, o = {}) {
     await clickCell(p, c.x, c.y);
     stats.shots++;
     await wait(150);
-    await waitAttack(p, 25000).catch(async () => { stats.notes.push('hang after shot'); const d = await st(p); stats.hang = { phase: d.phase, turn: d.turnNo, sel: d.sel, dlg: await dlg(p), c: c, level: d.level, err: await p.evaluate(() => window.__parquesErr || null) }; await p.screenshot({ path: new URL('./out/hang-' + tag + '.png', import.meta.url).pathname }); });
+    await waitAttack(p, 60000).catch(async () => { stats.notes.push("hang after shot"); const d = await st(p); stats.hang = { phase: d.phase, turn: d.turnNo, sel: d.sel, dlg: await dlg(p), c: c, level: d.level, err: await p.evaluate(() => window.__parquesErr || null) }; await p.screenshot({ path: new URL('./out/hang-' + tag + '.png', import.meta.url).pathname }); });
     if (stats.hang) break;
     const a = await st(p);
     if (a.foeHp < before) hitCells.push(c);
