@@ -91,6 +91,36 @@ async function suiteTouch() {
   await p.context().close();
 }
 
+async function suiteDaily() {
+  console.log('DESAFÍO DEL DÍA + IA DIFÍCIL');
+  const g = await mk(b, { viewport: VPS.mobile });
+  const p = g.page;
+  await p.goto(BASE); await p.waitForSelector('#daily');
+  ok(/mismo parque/.test(await p.textContent('#daily')), 'botón del desafío en el menú');
+  const sig = async () => { await p.waitForFunction(() => window.__parquesState().phase === 'place'); await placeAll(p); await p.click('#ready'); await waitAttack(p); await wait(300); const s = await st(p); return JSON.stringify([s.map, s.terrain, s.crop, s.pickups, await p.textContent('#inv-name')]); };
+  await p.click('#daily'); const a = await sig();
+  ok(/Desafío del día/.test(a), 'partida marcada como desafío: ' + JSON.parse(a)[4]);
+  const r = await playGame(p, 'daily', { maxMs: 300000, pMan: 0.3 });
+  ok(r.ended, 'desafío terminado en ' + r.turnNo + ' turnos');
+  const note = await p.textContent('#end-note');
+  ok(/Desafío del \d\d\/\d\d/.test(note) && /intento 1/.test(note), 'final muestra récord/intento: ' + note);
+  await p.click('#rematch'); const a2 = await sig();
+  ok(a === a2, 'revancha del desafío = mismo parque, tesoros e invasor');
+  await p.click('#back').catch(() => {}); await p.evaluate(() => document.getElementById('back').click()); await wait(500);
+  ok(/intento|récord/.test(await p.textContent('#daily')), 'menú muestra el récord/intentos: ' + await p.textContent('#daily'));
+  // IA difícil
+  await p.click('#ailevel [data-ai=dificil]');
+  await setup(p, { map: 'iguazu', terrain: 'agua' }); await p.click('#start');
+  await p.waitForFunction(() => window.__parquesState().phase === 'place'); await placeAll(p); await p.click('#ready'); await waitAttack(p);
+  ok(/Difícil/.test(await p.textContent('#inv-name')) && !/Desafío/.test(await p.textContent('#inv-name')), 'IA difícil activa: ' + await p.textContent('#inv-name'));
+  const r2 = await playGame(p, 'dificil', { maxMs: 300000, pMan: 0.3 });
+  ok(r2.ended && !r2.notes.length, 'partida contra la difícil terminada (' + r2.turnNo + ' turnos, ' + r2.title + ')');
+  ok(await p.evaluate(() => localStorage.getItem('parques.ai')) === 'dificil', 'la dificultad se recuerda');
+  ok(clean(g.log).length === 0, 'consola limpia ' + clean(g.log));
+  await shot(p, 'daily-end');
+  await p.context().close();
+}
+
 async function suiteTuto() {
   console.log('TUTO');
   for (const tag of ['mobile', 'desktop']) {
@@ -155,7 +185,7 @@ async function suitePvp() {
   ok(!clean(H.log).length && !clean(J.log).length, `consolas limpias ${clean(H.log)} ${clean(J.log)}`);
 }
 
-const suites = { place: suitePlace, hud: suiteHud, touch: suiteTouch, tuto: suiteTuto, pvc: suitePvc, pvp: suitePvp };
+const suites = { place: suitePlace, hud: suiteHud, touch: suiteTouch, daily: suiteDaily, tuto: suiteTuto, pvc: suitePvc, pvp: suitePvp };
 for (const k of which === 'all' ? Object.keys(suites) : which.split(',')) await suites[k]();
 await b.close();
 console.log(fails.length ? `\n${fails.length} FALLAS` : '\nTODO OK', '· capturas en', OUT);

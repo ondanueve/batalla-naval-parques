@@ -63,6 +63,14 @@
             <button type="button" class="seg" data-mode="pvp">Invitar a alguien</button>
           </div>
         </div>
+        <div class="block" id="ai-block">
+          <h2>Máquina</h2>
+          <div class="row" id="ailevel">
+            <button type="button" class="seg selected" data-ai="normal">Normal</button>
+            <button type="button" class="seg" data-ai="dificil">Difícil</button>
+          </div>
+          <p class="hint" id="ai-hint"></p>
+        </div>
         <div class="block">
           <h2>Invasor</h2>
           <div class="row" id="nations"></div>
@@ -77,6 +85,7 @@
       </div>
       <footer class="dock">
         <button type="button" class="go" id="start">Entrar al parque</button>
+        <button type="button" class="go daily" id="daily"><b>Desafío del día</b><small></small></button>
         <button type="button" class="linklike" id="how">¿Cómo se juega? · Tutorial</button>
       </footer>
     </section>

@@ -253,6 +253,10 @@
     });
   }
 
+  const AI_HINT = {
+    normal: "Juega con lo que ve, como vos. Cada personalidad gana más o menos la mitad de las veces.",
+    dificil: "Calcula dónde puede estar cada unidad con lo que sabe y remata en línea. No hace trampa: tampoco ve tu flota."
+  };
   function selectGroup(root, attr, key) {
     if (!root) return;
     root.querySelectorAll("button").forEach((b) => {
@@ -262,6 +266,7 @@
         if (key === "terrain") document.getElementById("terrain-hint").textContent = HINTS[opts.terrain];
         if (key === "map" || key === "terrain") applyTheme();
         if (key === "mode") {
+          document.getElementById("ai-block").classList.toggle("hidden", opts.mode === "pvp");
           document.getElementById("start").textContent = opts.mode === "pvp" ? "Crear enlace" : "Entrar al parque";
         }
         blip();
@@ -307,6 +312,7 @@
     ui.end.classList.add("hidden");
     ui.battle.classList.add("hidden");
     ui.menu.classList.remove("hidden");
+    dailyLabel();
     ui.stage.classList.remove("under-fire", "shake");
     cancelAnimationFrame(raf);
     raf = 0;
@@ -1946,7 +1952,8 @@
     catch (e) { local = C.placeRandom(opts.terrain, Math.random, opts.map, opts.crop); }
     let remote = null;
     if (role === "arg" && opts.mode === "pvc") {
-      try { remote = C.placeRandom(opts.terrain, Math.random, opts.map, opts.crop); }
+      const fr = opts.daily ? C.mulberry32(opts.daily.seed ^ 0xa5a5a5) : Math.random;
+      try { remote = C.placeRandom(opts.terrain, fr, opts.map, opts.crop); }
       catch (e) { remote = C.placeRandom(opts.terrain, Math.random, opts.map, opts.crop); }
     }
     match = {
@@ -2077,21 +2084,23 @@
     settleHand();
     stopClock();
     hudDirty = true;
-    const seed = opts.mode === "pvp" ? ((opts.seed >>> 0) || 1) : Math.floor(Math.random() * 4294967296);
+    const seed = opts.mode === "pvp" || opts.daily ? ((opts.seed >>> 0) || 1) : Math.floor(Math.random() * 4294967296);
     match.shared = C.newShared(seed, opts.terrain, opts.map, opts.crop);
     match.lastLevel = 0;
     if (opts.mode !== "pvp") {
-      const pers = C.PERSONALITIES[Math.floor(Math.random() * C.PERSONALITIES.length)];
+      const pers = opts.daily ? C.PERSONALITIES[seed % C.PERSONALITIES.length] : C.PERSONALITIES[Math.floor(Math.random() * C.PERSONALITIES.length)];
       match.aiPers = pers;
+      match.hard = !opts.daily && opts.ai === "dificil";
+      match.aiRng = opts.daily ? C.mulberry32(seed ^ 0x5eed) : Math.random;
       match.world = {
         shared: match.shared,
         p: { arg: match.meP, inv: { side: match.foeSide, know: C.newKnow(), pers, consec: 0 } }
       };
       const nation = C.NATIONS[opts.nation];
-      document.getElementById("inv-name").textContent = nation.flag + " " + nation.name.toUpperCase() + " · " + C.PERS_LABEL[pers];
+      document.getElementById("inv-name").textContent = nation.flag + " " + nation.name.toUpperCase() + " · " + C.PERS_LABEL[pers] + (match.hard ? " · Difícil" : "") + (opts.daily ? " · Desafío del día" : "");
       match.phase = "attack";
       tutoEvent("ready");
-      say("Invasor " + C.PERS_LABEL[pers].toLowerCase() + ": " + PERS_BLURB[pers] + ". Tu turno: disparás o maniobrás.");
+      say((opts.daily ? "Desafío del día. " : "") + "Invasor " + C.PERS_LABEL[pers].toLowerCase() + (match.hard ? " (difícil)" : "") + ": " + PERS_BLURB[pers] + ". Tu turno: disparás o maniobrás.");
       requestAnimationFrame(fit);
       hudDirty = true;
       return;
@@ -2679,8 +2688,8 @@
       if (match !== m) return;
       const ai = world.p.inv;
       C.expireSide(ai.side, sh);
-      const env = { side: ai.side, shared: sh, who: "inv", pers: ai.pers, consec: ai.consec, know: ai.know };
-      const act = C.aiChoose(env, Math.random);
+      const env = { side: ai.side, shared: sh, who: "inv", pers: ai.pers, consec: ai.consec, know: ai.know, hard: !!m.hard };
+      const act = C.aiChoose(env, m.aiRng || Math.random);
       const out = C.execAction(world, "inv", act);
       if (out.t === "shot") await playResults(out.results, true, out.pattern);
       else await playManeuver(false, out.t, out.pub || [], act);
@@ -2724,6 +2733,7 @@
     const stt = match.stats;
     const acc = accuracyOf(stt);
     const role = match.role;
+    if (opts.daily) return "Desafío del día de Parques en Guerra (" + opts.daily.key.split("-").reverse().join("/") + "): " + (win ? "lo gané en " + stt.turns + " turnos con " + acc + "% de precisión. ¿Lo hacés en menos?" : "me ganó tras " + stt.turns + " turnos. ¿Vos podés?");
     if (win) return (role === "arg" ? "Defendí " : "Tomé ") + parkName() + " en " + stt.turns + " turnos con " + acc + "% de precisión en Parques en Guerra. ¿Podés vos?";
     return "Caí en " + parkName() + " tras " + stt.turns + " turnos (" + acc + "% de precisión) en Parques en Guerra. ¿Me ganás la revancha?";
   }
@@ -2762,7 +2772,7 @@
     if (!match || match.phase !== "end") return;
     if (opts.mode !== "pvp") {
       resetFx();
-      startGame();
+      startGame({ daily: !!opts.daily });
       return;
     }
     const note = document.getElementById("end-note");
@@ -2817,6 +2827,7 @@
     ui.endTitle.textContent = argentinaHolds ? "El parque sigue siendo argentino." : "El invasor tomó el territorio.";
     match.stats.t1 = Date.now();
     renderEnd(win, argentinaHolds);
+    if (opts.daily && opts.mode !== "pvp") recordDaily(win);
     ui.end.classList.remove("hidden");
     say(win ? (match.role === "inv" ? "Tomaste el territorio. No queda nada de la defensa." : "No queda nada del invasor.") : "Perdiste la flota.");
     ui.stage.classList.remove("under-fire");
@@ -3034,12 +3045,71 @@
     });
   }
 
-  function startGame() {
+  /* ---------- Desafío del día: misma semilla para todos (fecha de Argentina), récord local ---------- */
+  let preDaily = null;
+  function dailyKey() {
+    try { return new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }); }
+    catch (e) { return new Date().toISOString().slice(0, 10); }
+  }
+  function hashStr(t) {
+    let h = 2166136261;
+    for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+  function dailyRec(key) {
+    try { return JSON.parse(store.get("parques.daily." + key) || "null") || { tries: 0, best: null }; }
+    catch (e) { return { tries: 0, best: null }; }
+  }
+  function dailyLabel() {
+    const b = document.getElementById("daily");
+    if (!b) return;
+    const r = dailyRec(dailyKey());
+    b.querySelector("small").textContent = r.best ? "Tu récord de hoy: " + plural(r.best.turns, "turno", "turnos")
+      : r.tries ? plural(r.tries, "intento", "intentos") + " hoy · todavía sin ganar" : "El mismo parque y el mismo invasor para todos, hoy";
+  }
+  function startDaily() {
+    const key = dailyKey();
+    const seed = hashStr("parques-" + key);
+    const r = C.mulberry32(seed);
+    if (!preDaily) preDaily = { map: opts.map, terrain: opts.terrain, nation: opts.nation, mode: opts.mode };
+    opts.map = ["nahuel", "iguazu", "glaciares"][Math.floor(r() * 3)];
+    opts.terrain = ["agua", "tierra", "mixto"][Math.floor(r() * 3)];
+    const nats = Object.keys(C.NATIONS);
+    opts.nation = nats[Math.floor(r() * nats.length)];
+    opts.mode = "pvc";
+    opts.daily = { key, seed, crop: Math.floor(r() * 5) };
+    startGame({ daily: true });
+  }
+  function recordDaily(win) {
+    const d = opts.daily;
+    if (!d || !match) return;
+    const stt = match.stats;
+    const rec = dailyRec(d.key);
+    rec.tries = (rec.tries || 0) + 1;
+    let nuevo = false;
+    if (win && (!rec.best || stt.turns < rec.best.turns || (stt.turns === rec.best.turns && accuracyOf(stt) > rec.best.acc))) {
+      rec.best = { turns: stt.turns, acc: accuracyOf(stt) };
+      nuevo = true;
+    }
+    store.set("parques.daily." + d.key, JSON.stringify(rec));
+    const [y, m, dd] = d.key.split("-");
+    document.getElementById("end-note").textContent = "Desafío del " + dd + "/" + m + " · " +
+      (nuevo ? "¡Nuevo récord: " + plural(stt.turns, "turno", "turnos") + "!" : rec.best ? "Récord: " + plural(rec.best.turns, "turno", "turnos") : "Todavía sin ganarlo") +
+      " · intento " + rec.tries;
+    dailyLabel();
+  }
+
+  function startGame(o) {
     const j = juke();
     if (j) j.start();
     blip();
-    opts.crop = Math.floor(Math.random() * 5);
-    opts.seed = Math.floor(Math.random() * 4294967296);
+    const daily = !!(o && o.daily) && !!opts.daily;
+    if (!daily) {
+      opts.daily = null;
+      if (preDaily) { Object.assign(opts, preDaily); preDaily = null; }
+    }
+    opts.crop = daily ? opts.daily.crop : Math.floor(Math.random() * 5);
+    opts.seed = daily ? opts.daily.seed : Math.floor(Math.random() * 4294967296);
     applyTheme();
     if (opts.mode === "pvp") {
       if (!window.Peer) {
@@ -3160,7 +3230,22 @@
   selectGroup(document.getElementById("terrains"), "terrain", "terrain");
   selectGroup(document.getElementById("modes"), "mode", "mode");
   buildNations();
-  document.getElementById("start").addEventListener("click", startGame);
+  document.getElementById("start").addEventListener("click", () => startGame());
+  document.getElementById("daily").addEventListener("click", () => startDaily());
+  dailyLabel();
+  // dificultad de la IA (solo contra la máquina); se recuerda
+  opts.ai = store.get("parques.ai") === "dificil" ? "dificil" : "normal";
+  document.querySelectorAll("#ailevel button").forEach((b) => {
+    b.classList.toggle("selected", b.dataset.ai === opts.ai);
+    b.addEventListener("click", () => {
+      opts.ai = b.dataset.ai;
+      store.set("parques.ai", opts.ai);
+      document.querySelectorAll("#ailevel button").forEach((el) => el.classList.toggle("selected", el === b));
+      document.getElementById("ai-hint").textContent = AI_HINT[opts.ai];
+      blip();
+    });
+  });
+  document.getElementById("ai-hint").textContent = AI_HINT[opts.ai];
   document.getElementById("back").addEventListener("click", showMenu);
   document.getElementById("again").addEventListener("click", showMenu);
   document.getElementById("rematch").addEventListener("click", onRematchClick);
