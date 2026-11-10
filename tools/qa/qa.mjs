@@ -67,6 +67,30 @@ async function suiteHud() {
   }
 }
 
+async function suiteTouch() {
+  console.log('TOUCH (apuntar con el dedo)');
+  const g = await mk(b, { viewport: VPS.mobile, ctx: { hasTouch: true, isMobile: true } });
+  const p = g.page;
+  await p.goto(BASE); await p.waitForSelector('#start');
+  await setup(p, { map: 'nahuel', terrain: 'agua' }); await p.click('#start');
+  await p.waitForFunction(() => window.__parquesState().phase === 'place');
+  await placeAll(p); await p.click('#ready'); await waitAttack(p); await wait(400);
+  const t0 = (await st(p)).turnNo;
+  const c = await cellXY(p, 4, 9), d = await cellXY(p, 6, 12);
+  const cdp = await p.context().newCDPSession(p);
+  const touch = (type, q) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: q ? [{ x: q.x, y: q.y }] : [] });
+  await touch('touchStart', c); await wait(250);
+  ok((await st(p)).turnNo === t0, 'apoyar el dedo no dispara todavía');
+  await touch('touchMove', d); await wait(250);
+  await shot(p, 'touch-aim');
+  await touch('touchEnd'); await wait(400);
+  const s1 = await st(p);
+  ok(s1.turnNo === t0 + 1, 'soltar dispara (turno ' + t0 + ' → ' + s1.turnNo + ')');
+  ok(s1.know.keys.includes('6,12') && !s1.know.keys.includes('4,9'), 'dispara donde se soltó, no donde se apoyó');
+  ok(clean(g.log).length === 0, 'consola limpia ' + clean(g.log));
+  await p.context().close();
+}
+
 async function suiteTuto() {
   console.log('TUTO');
   for (const tag of ['mobile', 'desktop']) {
@@ -131,7 +155,7 @@ async function suitePvp() {
   ok(!clean(H.log).length && !clean(J.log).length, `consolas limpias ${clean(H.log)} ${clean(J.log)}`);
 }
 
-const suites = { place: suitePlace, hud: suiteHud, tuto: suiteTuto, pvc: suitePvc, pvp: suitePvp };
+const suites = { place: suitePlace, hud: suiteHud, touch: suiteTouch, tuto: suiteTuto, pvc: suitePvc, pvp: suitePvp };
 for (const k of which === 'all' ? Object.keys(suites) : which.split(',')) await suites[k]();
 await b.close();
 console.log(fails.length ? `\n${fails.length} FALLAS` : '\nTODO OK', '· capturas en', OUT);

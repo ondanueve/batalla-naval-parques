@@ -101,6 +101,7 @@
   let moved = false;
   let gestureHeld = false;
   let preview = null;
+  let aiming = false; // dedo apoyado apuntando (dispara al soltar)
   let lastPlaceTag = "";
   let placeNote = "";
   let placeNoteT = 0;
@@ -1435,12 +1436,29 @@
             ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
           } else if (sel.mode === "shoot") {
             const pat = C.shotCells(match.side, sh, preview);
-            ctx.fillStyle = pat.level >= 2 ? "rgba(248,113,113,.42)" : pat.level === 1 ? "rgba(251,146,60,.4)" : "rgba(255,255,255,.2)";
+            const big = pat.cells.length > 1;
+            const pul = reduceMotion ? 0.5 : 0.5 + 0.5 * Math.sin(time / 140);
+            const rgb = pat.level >= 2 || pat.cells.length > 5 ? "248,113,113" : big ? "251,146,60" : "255,255,255";
+            ctx.fillStyle = "rgba(" + rgb + "," + (big ? 0.26 + 0.16 * pul : 0.2) + ")";
+            ctx.strokeStyle = "rgba(" + rgb + "," + (0.55 + 0.4 * pul) + ")";
+            ctx.lineWidth = Math.max(1.5, 2 * g.dpr);
             pat.cells.forEach((c) => {
               if (!C.inBounds(c.x, c.y)) return;
               const p = cellPx(g, c.x, c.y);
               ctx.fillRect(p.x + 1, p.y + 1, g.cellW - 2, g.cellH - 2);
+              if (big) ctx.strokeRect(p.x + 2, p.y + 2, g.cellW - 4, g.cellH - 4);
             });
+            // mira en el centro
+            const cc = cellCenter(g, preview.x, preview.y);
+            const rr = Math.min(g.cellW, g.cellH) * (0.3 + 0.05 * pul);
+            ctx.strokeStyle = "rgba(255,255,255,.9)";
+            ctx.beginPath();
+            ctx.arc(cc.x, cc.y, rr, 0, Math.PI * 2);
+            ctx.moveTo(cc.x - rr * 1.5, cc.y); ctx.lineTo(cc.x - rr * 0.5, cc.y);
+            ctx.moveTo(cc.x + rr * 0.5, cc.y); ctx.lineTo(cc.x + rr * 1.5, cc.y);
+            ctx.moveTo(cc.x, cc.y - rr * 1.5); ctx.lineTo(cc.x, cc.y - rr * 0.5);
+            ctx.moveTo(cc.x, cc.y + rr * 0.5); ctx.lineTo(cc.x, cc.y + rr * 1.5);
+            ctx.stroke();
           }
         }
       }
@@ -1702,6 +1720,9 @@
     rings.push({ x, y, life: 1, color: "#ffffff", size: 1.1, w: 2, delay: 0.1 });
   }
 
+  // desplazamiento "hacia arriba en pantalla" en coordenadas del lienzo (sirve con el tablero girado)
+  function upOff(g, k) { return rotView ? { x: g.cellW * k, y: 0 } : { x: 0, y: -g.cellH * k }; }
+
   function fxSunk(r, incoming) {
     const g = gridGeom();
     const cells = r.cells && r.cells.length ? r.cells : [{ x: r.x, y: r.y }];
@@ -1720,7 +1741,23 @@
     });
     shocks.push({ px: sx, py: sy, life: 1, max: g.cellW * 7, color: "rgba(255,170,80,A)" });
     shocks.push({ px: sx, py: sy, life: 1.25, max: g.cellW * 10, color: "rgba(255,255,255,A)" });
-    floats.push({ x: sx, y: sy - g.cellH * 0.6, vy: -26 * g.dpr, life: 1.4, color: incoming ? "#fecaca" : "#fde047", text: incoming ? "PERDIDO" : "HUNDIDO", size: 22 });
+    const uo = upOff(g, 0.6);
+    floats.push({ x: sx + uo.x, y: sy + uo.y, vy: -26 * g.dpr, life: 1.4, color: incoming ? "#fecaca" : "#fde047", text: incoming ? "PERDIDO" : "HUNDIDO", size: 22 });
+    if (!reduceMotion) {
+      // explosiones en cadena a lo largo de la unidad y, al final, ondas de agua/polvo donde se hundió
+      const jk = juke();
+      cells.forEach((c, i) => setTimeout(() => {
+        const g2 = gridGeom();
+        const p = cellCenter(g2, c.x, c.y);
+        addParts(14, { kind: "spark", x: p.x, y: p.y, sp: [120 * g2.dpr, 340 * g2.dpr], r: [1.6 * g2.dpr, 3.8 * g2.dpr], decay: [1.1, 2], g: 200 * g2.dpr, color: ["#fff7ed", "#fde047", "#f97316"] });
+        addParts(5, { kind: "smoke", x: p.x, y: p.y, spread: g2.cellW * 0.4, sp: [14 * g2.dpr, 70 * g2.dpr], arc: [-Math.PI * 0.9, -Math.PI * 0.1], r: [g2.cellW * 0.22, g2.cellW * 0.4], grow: g2.cellW * 1.4, decay: [0.3, 0.55], g: 0, color: ["#1f2937", "#334155", "#57534e"] });
+        shocks.push({ px: p.x, py: p.y, life: 1, max: g2.cellW * 2.6, color: "rgba(255,210,140,A)" });
+        trauma = Math.min(1, trauma + 0.12);
+        if (jk && jk.sfx.hit) jk.sfx.hit();
+      }, 260 + i * 140));
+      const land = opts.terrain === "tierra" || (opts.terrain === "mixto" && isLand(cells[0].x, cells[0].y));
+      setTimeout(() => cells.forEach((c, i) => rings.push({ x: c.x, y: c.y, life: 1, color: land ? "#d6d3d1" : "#7dd3fc", size: 3.2, w: 2, delay: i * 0.08 })), 300 + cells.length * 140);
+    }
     shake(incoming, 1);
     if (!reduceMotion) {
       hitstop = 0.13;
@@ -1819,11 +1856,11 @@
     const c = cellCenter(g, x, y);
     floats.push({ x: c.x, y: c.y, vy: -24 * g.dpr, life: 1.3, color, text, size });
   }
-  function fxStreak(x, y, n) {
+  function fxStreak(x, y, n, below) {
     const g = gridGeom();
     const c = cellCenter(g, x, y);
     const hot = n >= 4 ? "#f472b6" : n >= 3 ? "#fb923c" : "#fde047";
-    const up = rotView ? { x: g.cellW * 0.9, y: 0 } : { x: 0, y: -g.cellH * 0.9 };
+    const up = upOff(g, below ? -1.3 : 0.9);
     floats.push({ x: c.x + up.x, y: c.y + up.y, vy: -34 * g.dpr, life: 1.6, color: hot, text: "RACHA ×" + n, size: 14 + Math.min(4, n) * 3 });
     rings.push({ x, y, life: 1, color: hot, size: 1.2 + n * 0.35, w: 2 + n, delay: 0.12 });
     trauma = Math.min(1, trauma + 0.08 * n);
@@ -1884,7 +1921,12 @@
       if (fresh.length) {
         stt.streak = (stt.streak || 0) + 1;
         stt.bestStreak = Math.max(stt.bestStreak || 0, stt.streak);
-        if (stt.streak >= 2) fxStreak(fresh[0].x, fresh[0].y, stt.streak);
+        if (stt.streak >= 2) {
+          const sunkNow = fresh.some((r) => r.kind === "sunk");
+          const n = stt.streak, fx0 = fresh[0];
+          // si además hundió, la racha sale abajo y un rato después para no pisar «HUNDIDO»
+          if (sunkNow) setTimeout(() => fxStreak(fx0.x, fx0.y, n, true), 700); else fxStreak(fx0.x, fx0.y, n, false);
+        }
       } else if (results.some((r) => r.kind === "miss")) {
         if ((stt.streak || 0) >= 2) floatAt(results[0].x, results[0].y, "RACHA CORTADA", "#cbd5e1", 12);
         stt.streak = 0;
@@ -2259,6 +2301,8 @@
     if (!cell) return;
     if (!C.inBounds(cell.x, cell.y)) return;
     preview = cell;
+    // táctil: apoyar el dedo muestra la cruz/el área, arrastrar apunta, soltar dispara
+    if (sel.mode === "shoot" && e.pointerType !== "mouse") { aiming = true; e.preventDefault(); return; }
     lock(() => cellAction(cell));
   }
 
@@ -2299,7 +2343,7 @@
     const placing = match && match.phase === "place" && hand;
     const cell = cellFromEvent(e, !!placing);
     if (match && match.phase === "attack") {
-      preview = cell;
+      if (e.pointerType === "mouse" || aiming) preview = cell;
       return;
     }
     if (placing && !dragging && cell && e.pointerType === "mouse") {
@@ -2318,7 +2362,15 @@
     }
   }
 
-  function onPointerUp() {
+  function onPointerUp(e) {
+    if (aiming) {
+      aiming = false;
+      const c = preview;
+      if (e && e.type === "pointercancel") { preview = null; return; }
+      if (c && C.inBounds(c.x, c.y) && match && match.phase === "attack" && !busy && sel.mode === "shoot") lock(() => cellAction(c));
+      preview = null;
+      return;
+    }
     clearPress();
     if (!dragging) return;
     dragging = false;
@@ -3272,7 +3324,7 @@
     charge: match.side.charge,
     init: match.side.init,
     armor: match.local.reduce((a, u) => a + (u.armor || 0), 0),
-    know: { marks: match.know.marks.size, live: match.know.live.size, ghosts: match.know.ghosts.size },
+    know: { marks: match.know.marks.size, live: match.know.live.size, ghosts: match.know.ghosts.size, keys: [...match.know.marks.keys()] },
     pickups: match.shared ? match.shared.pickups.map((p) => ({ type: p.type, x: p.x, y: p.y, owner: p.owner || null })) : [],
     zones: match.shared ? C.zonesOf(match.shared, match.role).length : 0,
     foeZones: match.shared ? C.zonesOf(match.shared, C.other(match.role)).length : 0,
