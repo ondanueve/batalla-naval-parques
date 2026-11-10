@@ -176,6 +176,14 @@ async function suitePvp() {
   const [rh, rj] = await Promise.all([playGame(H.page, 'host', { maxMs: 700000, pMan: 0.3 }), playGame(J.page, 'joiner', { maxMs: 700000, pMan: 0.3 })]);
   a = await st(H.page); c = await st(J.page);
   ok(rh.ended && rj.ended && a.turnNo === c.turnNo, `partida completa, turnos iguales ${a.turnNo}/${c.turnNo}`);
+  if (!(rh.ended && rj.ended)) {
+    console.log('DIAG host', JSON.stringify(rh.hang || rh.notes), '\nDIAG joiner', JSON.stringify(rj.hang || rj.notes));
+    console.log('DIAG logs', clean(H.log), clean(J.log), await H.page.evaluate(() => window.__parquesErr), await J.page.evaluate(() => window.__parquesErr));
+    console.log('DIAG phases', a.phase, c.phase, await H.page.evaluate(() => window.__parquesStage), await J.page.evaluate(() => window.__parquesStage));
+    console.log('NET host\n' + (await H.page.evaluate(() => window.__parquesNet.join('\n'))));
+    console.log('NET joiner\n' + (await J.page.evaluate(() => window.__parquesNet.join('\n'))));
+    await b.close(); process.exit(1);
+  }
   ok(JSON.stringify(a.pickups) === JSON.stringify(c.pickups), 'tesoros iguales en ambos');
   await H.page.click('#rematch'); await wait(600); await J.page.click('#rematch'); await wait(2500);
   ok((await st(H.page)).phase === 'place' && (await st(J.page)).place.unplaced === 5, 'revancha: se vuelve a colocar');

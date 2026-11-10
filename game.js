@@ -111,6 +111,7 @@
   let clockId = 0;
   let busy = false;
   const inbox = [];
+  const netLog = [];
   let localReady = false;
   let remoteReady = false;
   let remoteLeft = 17;
@@ -223,8 +224,19 @@
   function drain() {
     if (busy || !inbox.length) return;
     busy = true;
+    const job = inbox.shift();
     Promise.resolve()
-      .then(() => inbox.shift()())
+      // un paso que se cuelga nunca debe trabar la cola (ni la red): a los 15 s se libera
+      .then(() => {
+        let done = false;
+        const run = Promise.resolve().then(job).finally(() => { done = true; });
+        const guard = WAIT(15000).then(() => {
+          if (done) return;
+          console.warn("parques: paso lento liberado");
+          netLog.push("TIMEOUT paso " + (window.__parquesStage || "") + " " + Math.round(performance.now() / 100) / 10);
+        });
+        return Promise.race([run, guard]);
+      })
       .catch((err) => console.error(err))
       .then(() => { busy = false; drain(); });
   }
@@ -1874,10 +1886,23 @@
     if (j && j.sfx.streak) j.sfx.streak(n);
   }
 
+  // los efectos nunca deben cortar el turno: si algo falla se registra y el juego sigue
   async function playResults(results, incoming, pattern) {
+    try { await playResultsFx(results, incoming, pattern); }
+    catch (err) {
+      window.__parquesErr = String(err && err.stack || err);
+      netLog.push("ERR fx " + String(err && err.message || err).slice(0, 80));
+      console.error(err);
+      ui.stage.classList.remove("under-fire");
+      viewOverride = null;
+      hudDirty = true;
+    }
+  }
+  async function playResultsFx(results, incoming, pattern) {
     viewOverride = incoming ? "local" : "remote";
     hudDirty = true;
     if (incoming) ui.stage.classList.add("under-fire");
+    window.__parquesStage = "pr:start " + results.length;
     let sunkAny = false;
     const j = juke();
     const stt = match && match.stats;
@@ -1938,9 +1963,11 @@
         stt.streak = 0;
       }
     }
+    window.__parquesStage = "pr:narrate";
     say(narrate(results, incoming, pattern));
     hudDirty = true;
     await WAIT((incoming ? 880 : 520) + (sunkAny ? 750 : 0));
+    window.__parquesStage = "pr:end";
     ui.stage.classList.remove("under-fire");
     viewOverride = null;
     hudDirty = true;
@@ -2539,10 +2566,11 @@
     const res = C.resolveVolley(match.side, cells);
     C.advance(sh, foeWho(), "shot");
     C.noteSpot(match.know, sanitizeSpot(msg.spot), sh.turnNo);
-    await playResults(res.results, true, { cells });
-    if (match !== m) return;
+    // la respuesta sale antes de la animación: el rival no espera a nuestros efectos
     const wire = res.results.map((r) => (r.blocked ? { x: r.x, y: r.y, kind: "miss" } : r));
     send({ t: "resolved", results: wire, hpLeft: res.hp.left, lost: res.lost, spot: mySpot() });
+    await playResults(res.results, true, { cells });
+    if (match !== m) return;
     if (res.lost) return finish(false);
     if (msg.keep) { match.phase = "defend"; hudDirty = true; say("El rival tiene Iniciativa: juega de nuevo."); return; }
     myTurnStart("Tu turno.");
@@ -2834,12 +2862,21 @@
     if (win) { const j = juke(); if (j) j.sfx.sunk(); }
   }
 
+  // registro corto de red para diagnosticar (window.__parquesNet)
+  window.__parquesNet = netLog;
+  function netNote(dir, msg) {
+    netLog.push(dir + " " + msg.t + " t" + (match && match.shared ? match.shared.turnNo : "-") + " " + (match ? match.phase : "-") + (busy ? " busy" : "") + " q" + inbox.length + " " + Math.round(performance.now() / 100) / 10);
+    if (netLog.length > 60) netLog.shift();
+  }
   function send(msg) {
-    if (conn && conn.open) conn.send(msg);
+    const open = !!(conn && conn.open);
+    if (msg.t !== "here" && msg.t !== "hello") netNote(open ? ">" : ">X", msg);
+    if (open) conn.send(msg);
   }
 
   function onData(msg) {
     if (!msg || !msg.t) return;
+    if (msg.t !== "here" && msg.t !== "hello") netNote("<", msg);
     if (msg.t === "here") {
       sendHello();
       if (match && match.phase === "lobby") beginPlace();
