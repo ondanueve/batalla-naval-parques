@@ -379,23 +379,33 @@
     }
   }
 
-  function newShared(seed, terrain, map, crop) {
+  /* Dos reglamentos sobre el mismo tablero:
+     - "clasico": batalla naval tradicional (un disparo por turno, nada se mueve, sin tesoros ni escalada).
+     - "reloaded": disparar o desarrollar (maniobras, tesoros, visión en vivo, escalada, patrones). */
+  const MODES = ["clasico", "reloaded"];
+  function normMode(m) { return m === "reloaded" ? "reloaded" : "clasico"; }
+  function isClassic(shared) { return !!shared && shared.mode === "clasico"; }
+
+  function newShared(seed, terrain, map, crop, mode) {
     const shared = {
-      seed: seed >>> 0, terrain, map, crop: crop || 0, turnNo: 0, nextId: 1,
+      seed: seed >>> 0, terrain, map, crop: crop || 0, turnNo: 0, nextId: 1, mode: normMode(mode),
       pickups: [], zones: [], log: [], lastChange: { arg: 0, inv: 0 }
     };
+    if (shared.mode === "clasico") return shared;
     const rng = mulberry32(shared.seed ^ 0x9e3779b9);
     ["torre", "artilleria", "blindaje", "iniciativa", "torre"].forEach((t) => spawnPickup(shared, t, rng));
     return shared;
   }
 
   function warLevel(shared) {
+    if (isClassic(shared)) return 0;
     const r = Math.floor(shared.turnNo / 2);
     return r < 8 ? 0 : r < 13 ? 1 : r < 18 ? 2 : 3;
   }
   const WAR_NAMES = ["Calma tensa", "Tensión", "Guerra total", "Bombardeo"];
   function roundOf(shared) { return Math.floor(shared.turnNo / 2) + 1; }
   function roundsToNextLevel(shared) {
+    if (isClassic(shared)) return 0;
     const lim = [8, 13, 18];
     const lvl = warLevel(shared);
     if (lvl >= 3) return 0;
@@ -404,6 +414,7 @@
 
   /* qué maniobras se pueden hacer hoy */
   function maneuverAllowed(kind, shared, consec) {
+    if (isClassic(shared)) return { ok: false, why: "Clásico: solo se dispara." };
     const lvl = warLevel(shared);
     const cap = [2, 1, 1, 0][lvl];
     if (consec >= cap) return { ok: false, why: lvl >= 3 ? "Bombardeo: solo se dispara." : "Ya maniobraste; ahora disparás." };
@@ -477,6 +488,7 @@
   }
 
   function shotCells(side, shared, cell) {
+    if (isClassic(shared)) return { cells: [{ x: cell.x, y: cell.y }], charged: false, level: 0 };
     const lvl = warLevel(shared);
     let lvlEff = side.charge >= 2 ? 2 : side.charge >= 1 ? 1 : 0;
     if (lvl >= 3) lvlEff = 2;
@@ -604,7 +616,7 @@
     shared.log.push({ n: shared.turnNo, who, kind });
     if (kind === "move" || kind === "repair") shared.lastChange[who] = shared.turnNo;
     shared.zones = shared.zones.filter((z) => z.until > shared.turnNo);
-    if (shared.turnNo % 12 === 0 && shared.pickups.filter((p) => p.type !== "torre").length < 4) {
+    if (shared.mode !== "clasico" && shared.turnNo % 12 === 0 && shared.pickups.filter((p) => p.type !== "torre").length < 4) {
       const rng = mulberry32(shared.seed ^ (shared.turnNo * 7919));
       const types = ["artilleria", "blindaje", "iniciativa", "torre"];
       const nt = shared.pickups.filter((p) => p.type === "torre").length;
@@ -720,6 +732,10 @@
       }
     }
     if (open.length) return open[Math.floor(rng() * open.length)];
+    // sin celdas de paridad: cualquier celda sin disparar (en clásico nunca se repite un tiro)
+    const rest = [];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!know.marks.has(key(x, y))) rest.push({ x, y });
+    if (rest.length) return rest[Math.floor(rng() * rest.length)];
     return { x: Math.floor(rng() * W), y: Math.floor(rng() * H) };
   }
 
@@ -755,6 +771,7 @@
       });
       return best;
     };
+    if (isClassic(shared)) return shoot();
     const roll = rng();
     const dmgUnits = repairable(side);
     const T = AI_TUNE[pers] || AI_TUNE.agresivo;
@@ -805,7 +822,7 @@
   function newWorld(o, rng) {
     const r = rng || Math.random;
     const mk = () => placeRandom(o.terrain, r, o.map, o.crop || 0);
-    const shared = newShared(o.seed != null ? o.seed : Math.floor(r() * 4294967296), o.terrain, o.map, o.crop || 0);
+    const shared = newShared(o.seed != null ? o.seed : Math.floor(r() * 4294967296), o.terrain, o.map, o.crop || 0, o.mode || "reloaded");
     return {
       shared,
       p: {
@@ -871,6 +888,7 @@
       const me = world.p[who];
       const env = { side: me.side, shared: world.shared, who, pers: me.pers, consec: me.consec, know: me.know, hard: me.hard };
       let act = aiChoose(env, rng);
+      if (act.t === "shot" && me.know.marks.has(key(act.cell.x, act.cell.y))) stats.repeat = (stats.repeat || 0) + 1;
       let out = execAction(world, who, act);
       stats[act.t === "shot" ? "shot" : "man"][who]++;
       if (out.lost) return { winner: who, turns: world.shared.turnNo, level: warLevel(world.shared), stats };
@@ -898,7 +916,7 @@
     key, cellsOf, inBounds, canPlace, placeIssue, placeRandom, placeRemaining, fleetHp,
     shipAt, shipStatus, resolveShots, cross, area, aiShot, mulberry32,
     battleMayStart, isLand, CROP_COUNT, MIXED,
-    PICKUPS, MANEUVERS, PERSONALITIES, PERS_LABEL, WAR_NAMES, other, newSide, newKnow, newShared, newWorld,
+    MODES, normMode, isClassic, PICKUPS, MANEUVERS, PERSONALITIES, PERS_LABEL, WAR_NAMES, other, newSide, newKnow, newShared, newWorld,
     warLevel, roundOf, roundsToNextLevel, maneuverAllowed, inZone, zonesOf, addWatch, spottedCells, noteSpot,
     noteResults, isStale, shotCells, resolveVolley, moveOptions, translateUnit, collectUnder, applyPublicCollect,
     repairable, applyRepair, AI_TUNE, applyAim, expireSide, advance, shotTarget, densityTarget, aiChoose, refreshVision, execAction, simulate
