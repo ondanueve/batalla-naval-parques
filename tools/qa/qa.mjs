@@ -27,27 +27,73 @@ const hudVisible = (p) => p.evaluate(() => ['#hud-top', '#dock-btns', '#hud-bott
 
 async function suitePlace() {
   console.log('PLACE');
-  for (const [tag, vp] of Object.entries(VPS)) {
-    const { page: p, log } = await newGame(vp);
+  for (const tag of ['mobile', 'desktop', 'landscape']) {
+    const vp = VPS[tag], touch = tag !== 'desktop';
+    const g = await mk(b, { viewport: vp, ctx: touch ? { hasTouch: true, isMobile: tag === 'mobile' } : {} });
+    const { page: p, log } = g;
+    await p.goto(BASE); await p.waitForSelector('#start');
+    await setup(p, { map: 'iguazu', terrain: 'mixto' }); await p.click('#start');
+    await p.waitForFunction(() => window.__parquesState().phase === 'place', null, { timeout: 20000 });
+    const tap = async (x, y) => { const c = await cellXY(p, x, y); if (touch) await p.touchscreen.tap(c.x, c.y); else await p.mouse.click(c.x, c.y); await wait(120); };
+    const drag = async (x0, y0, x1, y1) => {
+      const a = await cellXY(p, x0, y0), z = await cellXY(p, x1, y1);
+      // Playwright no arrastra con touchscreen: el puntero sirve igual para el gesto (pointer events)
+      await p.mouse.move(a.x, a.y); await p.mouse.down(); await p.mouse.move((a.x + z.x) / 2, (a.y + z.y) / 2, { steps: 4 }); await p.mouse.move(z.x, z.y, { steps: 4 }); await p.mouse.up(); await wait(150);
+    };
     let s = await st(p);
     ok(s.place.unplaced === 5 && s.units.every((u) => u.lifted), `${tag}: arranca sin unidades colocadas`);
     ok((await hudVisible(p)).length === 0, `${tag}: sin HUD en colocación (${await hudVisible(p)})`);
-    ok(/Posicioná tu/.test(s.place.msg), `${tag}: mensaje "${s.place.msg.slice(0, 30)}…"`);
-    const h0 = s.place.handH; const c = await cellXY(p, 4, 8);
-    await p.mouse.move(c.x, c.y); await p.mouse.down(); await wait(700); await p.mouse.up(); await wait(150);
-    s = await st(p); ok(s.place.handH !== h0 && s.place.unplaced === 5, `${tag}: pulsación larga rota sin soltar`);
-    await shot(p, `place-${tag}`);
+    ok(/Posicioná tu/.test(s.place.msg) && /tocá dónde va/.test(s.place.msg), `${tag}: mensaje "${s.place.msg.slice(0, 50)}…"`);
+    // buscar un lugar libre válido tocando: la unidad queda pendiente, no fijada
+    let pend = null;
+    for (let i = 0; i < 40 && !(pend && pend.ok); i++) { await tap(2 + (i % 5), 3 + ((i * 3) % 14)); pend = (await st(p)).place.pending; }
+    s = await st(p);
+    ok(pend && pend.ok && s.place.unplaced === 5, `${tag}: tocar apoya la unidad pendiente sin fijarla (${JSON.stringify(pend)})`);
+    ok(await p.isVisible('#place-ctl') && await p.isVisible('#pc-ok') && await p.isVisible('#pc-rot'), `${tag}: ⟳ y ✓ flotan al lado`);
+    ok(/arrastrá · tocá para girar · ✓/.test(s.place.msg), `${tag}: pista "arrastrá · tocá para girar · ✓"`);
+    await shot(p, `place-pending-${tag}`);
+    // tocar la pendiente la gira en el lugar (con ajuste automático)
+    const h0 = pend.h; await tap(pend.x, pend.y);
+    let p2 = (await st(p)).place.pending;
+    ok(p2 && p2.h !== h0, `${tag}: tocar la pendiente la gira (${h0}→${p2 && p2.h})`);
+    // botón ⟳ y tecla R también giran
+    await p.click('#pc-rot'); await wait(120); p2 = (await st(p)).place.pending;
+    ok(p2 && p2.h === h0, `${tag}: ⟳ gira`);
+    if (!touch) { await p.keyboard.press('r'); await wait(80); ok((await st(p)).place.pending.h !== h0, `${tag}: R gira`); await p.keyboard.press('r'); await wait(80); }
+    // arrastrar la pendiente la mueve y sigue pendiente
+    p2 = (await st(p)).place.pending;
+    await drag(p2.x, p2.y, p2.x, Math.min(17, p2.y + 2));
+    let p3 = (await st(p)).place.pending;
+    ok(p3 && (p3.x !== p2.x || p3.y !== p2.y) && (await st(p)).place.unplaced === 5, `${tag}: arrastrar mueve sin fijar (${p2.x},${p2.y}→${p3 && p3.x},${p3 && p3.y})`);
+    // confirmar (✓ o Enter) fija y pasa a la siguiente
+    for (let i = 0; i < 40 && !((await st(p)).place.pending || {}).ok; i++) await tap(1 + (i % 7), 2 + ((i * 5) % 16));
+    if (touch) await p.click('#pc-ok'); else await p.keyboard.press('Enter');
+    await wait(150); s = await st(p);
+    ok(s.place.unplaced === 4 && !s.place.pending, `${tag}: ${touch ? '✓' : 'Enter'} confirma y pasa a la siguiente (${s.place.unplaced} por poner)`);
+    const placed = s.units.find((u) => !u.lifted);
+    // levantar una ya puesta para ajustarla
+    await tap(placed.x, placed.y); s = await st(p);
+    ok(s.place.pending && s.place.pending.name === placed.name, `${tag}: tocar una unidad puesta la levanta (${s.place.pending && s.place.pending.name})`);
+    await p.click('#pc-rot'); await wait(120);
+    for (let i = 0; i < 40 && !((await st(p)).place.pending || {}).ok; i++) await tap(1 + (i % 7), 2 + ((i * 5) % 16));
+    await p.click('#pc-ok'); await wait(150); s = await st(p);
+    ok(s.place.unplaced === 4 && !s.units.find((u) => u.name === placed.name).lifted, `${tag}: reajustada y confirmada otra vez`);
     await placeAll(p);
     ok(await p.isVisible('#ready'), `${tag}: «Estoy listo» aparece al final`);
     await p.click('#ready'); await waitAttack(p);
     ok(clean(log).length === 0, `${tag}: consola limpia ${JSON.stringify(clean(log))}`);
-    await p.context().close();
+    await g.ctx.close();
   }
+  // tiempo agotado: la pendiente válida se fija donde está y el resto se completa al azar
   const { page: p } = await newGame(VPS.mobile, { terrain: 'agua' });
+  let pend = null;
+  for (let i = 0; i < 40 && !(pend && pend.ok); i++) { await clickCell(p, 2 + (i % 5), 3 + ((i * 3) % 14)); pend = (await st(p)).place.pending; }
   const t0 = Date.now();
   await p.waitForFunction(() => window.__parquesState().phase === 'attack', null, { timeout: 80000 });
   const s = await st(p);
+  const kept = s.units.find((u) => u.name === pend.name);
   ok(s.units.every((u) => !u.lifted) && s.place.unplaced === 0, `timeout: autocompleta al azar (${Math.round((Date.now() - t0) / 1000)}s)`);
+  ok(kept && kept.x === pend.x && kept.y === pend.y && kept.horizontal === pend.h, `timeout: la pendiente válida queda donde estaba`);
   await p.context().close();
 }
 

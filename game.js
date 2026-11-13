@@ -601,10 +601,14 @@
     if (placing) {
       const next = match.local.find((u) => u.unplaced);
       const secs = Math.max(0, clockLeft) + " s";
-      if (next) {
-        main = "Posicioná tu " + next.name.toLowerCase() + ".";
-        sub = placeNote || (secs + " · mantené apretado para rotar" + (hand && hand.horizontal ? "" : " (vertical)"));
-        if (tuto && tuto.step === 0 && !placeNote) sub = "Tutorial: " + secs + " · arrastrá, soltá y mantené apretado para rotar";
+      const cur = hand ? hand.ship : next;
+      if (hand && !next) {
+        main = "Ajustá tu " + cur.name.toLowerCase() + ".";
+        sub = placeNote || (secs + " · arrastrá · tocá para girar · ✓");
+      } else if (next) {
+        main = "Posicioná tu " + cur.name.toLowerCase() + ".";
+        sub = placeNote || (secs + " · " + (hand && hand.set ? "arrastrá · tocá para girar · ✓" : "tocá dónde va"));
+        if (tuto && tuto.step === 0 && !placeNote) sub = "Tutorial: " + sub;
       } else {
         main = "Flota lista.";
         sub = placeNote || (secs + " · tocá una unidad para moverla, o Estoy listo");
@@ -834,6 +838,7 @@
       ctx.fillRect(0, 0, w, h);
     }
     flushHud();
+    positionPlaceCtl();
   }
 
   function unitDir(ship) {
@@ -2194,7 +2199,7 @@
     if (!match || match.phase !== "place" || sealed || hand) return;
     const ship = match.local.find((u) => u.unplaced);
     if (!ship) { hudDirty = true; return; }
-    hand = { ship, ox: ship.x, oy: ship.y, oh: true, horizontal: ship.horizontal !== false, grabDx: 0, grabDy: 0 };
+    hand = { ship, ox: ship.x, oy: ship.y, oh: true, horizontal: ship.horizontal !== false, grabDx: 0, grabDy: 0, set: false };
     ship.lifted = true;
     preview = null;
     lastPlaceTag = "";
@@ -2222,11 +2227,34 @@
     placeNoteT = setTimeout(() => { placeNote = ""; hudDirty = true; }, 2200);
     hudDirty = true;
   }
+  // la posición válida más cercana (para girar o soltar cerca del borde sin pelearse con la grilla)
+  function nudgeHand(x, y) {
+    if (!hand) return { x, y };
+    if (handIssue(x, y) === "") return { x, y };
+    let best = null, bd = 99;
+    for (let dy = -4; dy <= 4; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const d = Math.abs(dx) + Math.abs(dy);
+        if (d >= bd || d > 4) continue;
+        if (handIssue(x + dx, y + dy) === "") { best = { x: x + dx, y: y + dy }; bd = d; }
+      }
+    }
+    if (best) return best;
+    // nada válido cerca: al menos que quede dentro del mapa
+    const w = hand.horizontal ? hand.ship.size : 1, h = hand.horizontal ? 1 : hand.ship.size;
+    return { x: Math.max(0, Math.min(C.W - w, x)), y: Math.max(0, Math.min(C.H - h, y)) };
+  }
   function rotateHand() {
     if (!hand) return false;
     hand.horizontal = !hand.horizontal;
     hand.grabDx = 0;
     hand.grabDy = 0;
+    if (preview && hand.set) {
+      // gira sobre la celda del medio y se acomoda solo si no entra
+      const half = Math.floor((hand.ship.size - 1) / 2);
+      const cx = hand.horizontal ? preview.x : preview.x + half, cy = hand.horizontal ? preview.y + half : preview.y;
+      preview = nudgeHand(hand.horizontal ? cx - half : cx, hand.horizontal ? cy : cy - half);
+    }
     const issue = preview ? handIssue(preview.x, preview.y) : "";
     if (issue) flashNote(ISSUE_TEXT[issue] || "Ahí no entra.");
     say(issue ? ISSUE_TEXT[issue] : (hand.horizontal ? "Horizontal. " : "Vertical. ") + hand.ship.name + ". Verde entra, rojo no.");
@@ -2254,7 +2282,7 @@
 
   function settleHand() {
     if (!hand) return;
-    if (preview && handIssue(preview.x, preview.y) === "") {
+    if (preview && hand.set && handIssue(preview.x, preview.y) === "") {
       hand.ship.x = preview.x;
       hand.ship.y = preview.y;
       hand.ship.horizontal = hand.horizontal;
@@ -2275,17 +2303,71 @@
       oh: ship.horizontal,
       horizontal: ship.horizontal,
       grabDx: cell.x - ship.x,
-      grabDy: cell.y - ship.y
+      grabDy: cell.y - ship.y,
+      set: true
     };
     ship.lifted = true;
     preview = { x: ship.x, y: ship.y };
     lastPlaceTag = "";
     hudDirty = true;
     const where = ship.kind === "tanque" ? "Solo tierra." : "Solo agua.";
-    say(ship.name + " arriba. La proa es el punto blanco. " + where + " Verde entra, rojo no.");
+    say(ship.name + " en tus manos: arrastrá, tocala para girar y ✓ para dejarla. " + where);
+  }
+  function onGhost(cell) {
+    if (!hand || !hand.set || !preview || !cell) return false;
+    return C.cellsOf({ x: preview.x, y: preview.y, size: hand.ship.size, horizontal: hand.horizontal }).some((c) => c.x === cell.x && c.y === cell.y);
+  }
+  function placedShipAt(cell) {
+    if (!match || !cell) return null;
+    return match.local.find((u) => !u.unplaced && !u.lifted && C.cellsOf(u).some((c) => c.x === cell.x && c.y === cell.y)) || null;
+  }
+  // ⟳ y ✓ flotando al lado de la unidad pendiente (en coordenadas de pantalla, con el tablero girado o no)
+  var ctlKey = ""; // var: el loop puede llamar antes de llegar a esta línea
+  function cellToScreen(r, x, y) {
+    const rot = isRot(r.width, r.height);
+    const k = rot ? geomCss(r.height, r.width, 1, true) : geomCss(r.width, r.height, 1, false);
+    const px = k.ox + x * k.cellW, py = k.oy + y * k.cellH;
+    return rot ? { x: py, y: r.height - px } : { x: px, y: py };
+  }
+  function positionPlaceCtl() {
+    const placeCtl = document.getElementById("place-ctl");
+    if (!placeCtl) return;
+    const show = !!(match && match.phase === "place" && !sealed && hand && hand.set && preview && !dragging);
+    const ok = show && handIssue(preview.x, preview.y) === "";
+    const key = show ? [preview.x, preview.y, hand.horizontal, ok, ui.canvas.clientWidth, ui.canvas.clientHeight].join(",") : "-";
+    if (key === ctlKey) return;
+    ctlKey = key;
+    placeCtl.classList.toggle("hidden", !show);
+    if (!show) return;
+    const r = ui.canvas.getBoundingClientRect();
+    const host = placeCtl.offsetParent ? placeCtl.offsetParent.getBoundingClientRect() : { left: 0, top: 0 };
+    const w = hand.horizontal ? hand.ship.size : 1, h = hand.horizontal ? 1 : hand.ship.size;
+    const a = cellToScreen(r, preview.x, preview.y), b = cellToScreen(r, preview.x + w, preview.y + h);
+    const L = Math.min(a.x, b.x), R = Math.max(a.x, b.x), T = Math.min(a.y, b.y), B = Math.max(a.y, b.y);
+    const cw = placeCtl.offsetWidth || 92, ch = placeCtl.offsetHeight || 40, gap = 8;
+    let x = (L + R) / 2 - cw / 2;
+    let y = B + gap;
+    if (y + ch > r.height - 50) y = T - ch - gap; // abajo no hay lugar: arriba
+    if (y < 4) { y = (T + B) / 2 - ch / 2; x = R + gap; if (x + cw > r.width - 4) x = L - cw - gap; }
+    x = Math.max(4, Math.min(r.width - cw - 4, x));
+    y = Math.max(4, Math.min(r.height - ch - 4, y));
+    placeCtl.style.left = Math.round(r.left - host.left + x) + "px";
+    placeCtl.style.top = Math.round(r.top - host.top + y) + "px";
+    document.getElementById("pc-ok").disabled = !ok;
+  }
+  // deja la unidad pendiente donde está (si entra) o la devuelve a su lugar
+  function parkHand() {
+    if (!hand) return;
+    if (hand.set && preview && handIssue(preview.x, preview.y) === "") { tryDrop(preview, true); return; }
+    cancelHand();
+  }
+  function confirmHand() {
+    if (!hand || !match || match.phase !== "place" || sealed) return;
+    if (!hand.set || !preview) { flashNote("Primero tocá dónde va."); return; }
+    tryDrop(preview);
   }
 
-  function tryDrop(cell) {
+  function tryDrop(cell, quiet) {
     if (!hand || !cell) return;
     const issue = handIssue(cell.x, cell.y);
     if (issue) {
@@ -2306,9 +2388,10 @@
     placeNote = "";
     hudDirty = true;
     blip();
+    if (quiet) return;
     nextHand();
-    if (placedAll()) say("Flota completa. Tocá una unidad para moverla o Estoy listo.");
-    else say(wasNew ? "Apoyada. Seguimos." : "Reacomodada.");
+    if (placedAll()) say("Flota completa. Tocá una unidad para ajustarla o Estoy listo.");
+    else say(wasNew ? "Lista. Ahora la que sigue." : "Reacomodada.");
   }
 
   function onPointerDown(e) {
@@ -2320,24 +2403,39 @@
       e.preventDefault();
       if (e.button === 2) { rotateHand(); return; }
       pressRot = false;
-      if (hand) {
+      moved = false;
+      // 1) sobre la unidad pendiente: arrastrar (o, si no se mueve, girar al soltar)
+      if (onGhost(cell)) {
+        hand.grabDx = cell.x - preview.x;
+        hand.grabDy = cell.y - preview.y;
         gestureHeld = true;
         dragging = true;
-        moved = false;
-        hand.grabDx = 0;
-        hand.grabDy = 0;
-        preview = { x: cell.x, y: cell.y };
-        armPress();
+        hand.tapRot = true;
         return;
       }
-      if (!C.inBounds(cell.x, cell.y)) return;
-      const ship = C.shipAt(match.local, cell.x, cell.y);
-      if (!ship) return;
-      lift(ship, cell);
-      gestureHeld = false;
-      dragging = true;
-      moved = false;
-      armPress();
+      // 2) sobre una unidad ya puesta: la levanta para ajustarla
+      const other = C.inBounds(cell.x, cell.y) ? placedShipAt(cell) : null;
+      if (other) {
+        parkHand();
+        lift(other, cell);
+        gestureHeld = true;
+        dragging = true;
+        hand.tapRot = false;
+        return;
+      }
+      // 3) en un lugar libre: la pendiente salta ahí (y se puede seguir arrastrando)
+      if (hand && C.inBounds(cell.x, cell.y)) {
+        hand.set = true;
+        hand.grabDx = 0;
+        hand.grabDy = 0;
+        hand.tapRot = false;
+        preview = nudgeHand(cell.x, cell.y);
+        gestureHeld = true;
+        dragging = true;
+        lastPlaceTag = "";
+        blip();
+        hudDirty = true;
+      }
       return;
     }
     const cell = cellFromEvent(e);
@@ -2394,13 +2492,14 @@
       if (e.pointerType === "mouse" || aiming) preview = cell;
       return;
     }
-    if (placing && !dragging && cell && e.pointerType === "mouse") {
-      preview = { x: cell.x - hand.grabDx, y: cell.y - hand.grabDy };
+    if (placing && !dragging && cell && e.pointerType === "mouse" && !hand.set) {
+      // todavía sin apoyar: con mouse, la silueta sigue al puntero
+      preview = { x: cell.x, y: cell.y };
       return;
     }
     if (!dragging || !hand || !cell) return;
     const origin = { x: cell.x - hand.grabDx, y: cell.y - hand.grabDy };
-    if (!preview || origin.x !== preview.x || origin.y !== preview.y) { moved = true; pressRot = false; clearPress(); }
+    if (!preview || origin.x !== preview.x || origin.y !== preview.y) { moved = true; hand.tapRot = false; pressRot = false; clearPress(); }
     preview = origin;
     const issue = handIssue(origin.x, origin.y);
     const tag = issue || "ok";
@@ -2423,8 +2522,14 @@
     if (!dragging) return;
     dragging = false;
     if (!hand) return;
-    if (pressRot) { pressRot = false; return; }
-    if ((gestureHeld || moved) && preview) tryDrop(preview);
+    pressRot = false;
+    // tocar la pendiente sin arrastrar la gira; arrastrar la deja pendiente donde quedó
+    if (hand.tapRot && !moved) { hand.tapRot = false; rotateHand(); return; }
+    if (moved && preview) {
+      const fit = nudgeHand(preview.x, preview.y);
+      if (Math.abs(fit.x - preview.x) + Math.abs(fit.y - preview.y) <= 1) preview = fit;
+    }
+    hudDirty = true;
   }
 
   /* ================= DISPARAR O DESARROLLAR ================= */
@@ -3312,8 +3417,11 @@
   ui.rotate.addEventListener("click", () => { if (!rotateHand()) say("Primero levantá una unidad tocándola."); });
   window.addEventListener("keydown", (e) => {
     if ((e.key === "r" || e.key === "R") && match && match.phase === "place" && hand) rotateHand();
+    if (e.key === "Enter" && match && match.phase === "place" && hand && hand.set) { e.preventDefault(); confirmHand(); }
   });
   ui.ready.addEventListener("click", () => markReady());
+  document.getElementById("pc-ok").addEventListener("click", (e) => { e.stopPropagation(); confirmHand(); });
+  document.getElementById("pc-rot").addEventListener("click", (e) => { e.stopPropagation(); if (match && match.phase === "place" && !sealed) rotateHand(); });
   ui.shoot.addEventListener("click", () => {
     if (!match || match.phase !== "attack") return;
     selReset("shoot");
@@ -3444,7 +3552,7 @@
     phase: match.phase,
     view: viewKind(),
     hudOpen: document.body.classList.contains("hud-open"),
-    place: { unplaced: match.local.filter((s) => s.unplaced).length, next: (match.local.find((s) => s.unplaced) || {}).name || null, handH: hand ? hand.horizontal : null, hasHand: !!hand, msg: (document.getElementById("place-msg") || {}).textContent || "" },
+    place: { unplaced: match.local.filter((s) => s.unplaced).length, next: (match.local.find((s) => s.unplaced) || {}).name || null, handH: hand ? hand.horizontal : null, hasHand: !!hand, pending: hand && hand.set && preview ? { x: preview.x, y: preview.y, h: hand.horizontal, ok: handIssue(preview.x, preview.y) === "", name: hand.ship.name } : null, msg: (document.getElementById("place-msg") || {}).textContent || "" },
     ships: match.local.map((s) => s.name + (s.lifted ? "*" : "")).join(","),
     units: match.local.map((s) => ({ name: s.name, kind: s.kind, x: s.x, y: s.y, size: s.size, horizontal: s.horizontal, lifted: !!s.lifted })),
     lifted: !!hand,

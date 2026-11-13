@@ -46,13 +46,21 @@ export async function waitAttack(p, timeout = 15000) {
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 export { wait };
 
+// Colocación con unidad pendiente: tocar apoya (sin fijar), ✓ confirma y pasa a la siguiente.
 export async function placeAll(p) {
   await p.waitForFunction(() => window.__parquesState && window.__parquesState().phase === 'place', null, { timeout: 40000 });
   for (let guard = 0; guard < 400; guard++) {
     const s0 = await st(p);
-    if (!s0.place || s0.place.unplaced === 0) break;
-    if (guard % 25 === 24) await p.keyboard.press('r');
-    const c = await cellXY(p, Math.floor(Math.random() * 10), Math.floor(Math.random() * 20));
+    if (s0.phase !== 'place') break;
+    if (s0.place.unplaced === 0 && !s0.place.pending) break;
+    const pend = s0.place.pending;
+    if (pend && pend.ok) { await p.click('#pc-ok'); await wait(40); continue; }
+    if (pend && guard % 7 === 6) { await p.keyboard.press('r'); continue; }
+    // tocar un lugar libre (no sobre otra unidad ya puesta)
+    let x, y, tries = 0;
+    do { x = Math.floor(Math.random() * 10); y = Math.floor(Math.random() * 20); tries++; }
+    while (tries < 50 && s0.units.some((u) => !u.lifted && (u.horizontal ? (y === u.y && x >= u.x && x < u.x + u.size) : (x === u.x && y >= u.y && y < u.y + u.size))));
+    const c = await cellXY(p, x, y);
     await p.mouse.click(c.x, c.y);
   }
   await p.waitForSelector('#ready:not(.hidden)');

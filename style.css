@@ -1025,3 +1025,17 @@ body.in-battle:not(.hud-open) #turnbar .act.shoot.boost small { display: block; 
 .go.daily b { font: inherit; }
 .go.daily small { font-family: Nunito, sans-serif; font-size: 0.7rem; font-weight: 800; letter-spacing: 0; text-transform: none; opacity: 0.85; }
 #ai-block.hidden { display: none; }
+
+/* Colocación: ⟳ y ✓ flotando al lado de la unidad pendiente */
+#place-ctl { position: absolute; z-index: 10; display: flex; gap: 8px; pointer-events: auto; }
+#place-ctl.hidden, body:not(.placing) #place-ctl { display: none; }
+#place-ctl button {
+  width: 40px; height: 40px; border-radius: 50%; padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.55); color: #fff; font-size: 1.25rem; font-weight: 900; line-height: 1;
+  background: rgba(15, 23, 42, 0.62); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); cursor: pointer; touch-action: manipulation;
+}
+#place-ctl #pc-ok { background: rgba(22, 163, 74, 0.82); border-color: #bbf7d0; }
+#place-ctl #pc-ok:disabled { background: rgba(127, 29, 29, 0.6); border-color: rgba(255, 255, 255, 0.3); opacity: 0.7; cursor: not-allowed; }
+@media (prefers-reduced-motion: no-preference) { #place-ctl:not(.hidden) { animation: ctlIn .16s ease-out; } }
+@keyframes ctlIn { from { opacity: 0; transform: scale(.85); } }
