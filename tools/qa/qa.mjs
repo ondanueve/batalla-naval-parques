@@ -137,33 +137,26 @@ async function suiteTouch() {
   await p.context().close();
 }
 
-async function suiteDaily() {
-  console.log('DESAFÍO DEL DÍA + IA DIFÍCIL');
+async function suiteAi() {
+  console.log('IA NORMAL / DIFÍCIL (sin desafío del día)');
   const g = await mk(b, { viewport: VPS.mobile });
   const p = g.page;
-  await p.goto(BASE); await p.waitForSelector('#daily');
-  ok(/mismo parque/.test(await p.textContent('#daily')), 'botón del desafío en el menú');
-  const sig = async () => { await p.waitForFunction(() => window.__parquesState().phase === 'place'); await placeAll(p); await p.click('#ready'); await waitAttack(p); await wait(300); const s = await st(p); return JSON.stringify([s.map, s.terrain, s.crop, s.pickups, await p.textContent('#inv-name')]); };
-  await p.click('#daily'); const a = await sig();
-  ok(/Desafío del día/.test(a), 'partida marcada como desafío: ' + JSON.parse(a)[4]);
-  const r = await playGame(p, 'daily', { maxMs: 300000, pMan: 0.3 });
-  ok(r.ended, 'desafío terminado en ' + r.turnNo + ' turnos');
-  const note = await p.textContent('#end-note');
-  ok(/Desafío del \d\d\/\d\d/.test(note) && /intento 1/.test(note), 'final muestra récord/intento: ' + note);
-  await p.click('#rematch'); const a2 = await sig();
-  ok(a === a2, 'revancha del desafío = mismo parque, tesoros e invasor');
-  await p.click('#back').catch(() => {}); await p.evaluate(() => document.getElementById('back').click()); await wait(500);
-  ok(/intento|récord/.test(await p.textContent('#daily')), 'menú muestra el récord/intentos: ' + await p.textContent('#daily'));
-  // IA difícil
+  await p.goto(BASE); await p.waitForSelector('#start');
+  await p.evaluate(() => localStorage.setItem('parques.daily.2026-01-01', '{"tries":3}'));
+  await p.reload(); await p.waitForSelector('#start');
+  ok(!(await p.$('#daily')), 'no hay botón de desafío del día');
+  ok(await p.evaluate(() => !Object.keys(localStorage).some((k) => k.startsWith('parques.daily.'))), 'se borran los récords viejos del desafío');
+  ok(await p.isVisible('#ailevel [data-ai=normal]') && await p.isVisible('#ailevel [data-ai=dificil]'), 'selector Normal/Difícil presente');
   await p.click('#ailevel [data-ai=dificil]');
   await setup(p, { map: 'iguazu', terrain: 'agua' }); await p.click('#start');
   await p.waitForFunction(() => window.__parquesState().phase === 'place'); await placeAll(p); await p.click('#ready'); await waitAttack(p);
-  ok(/Difícil/.test(await p.textContent('#inv-name')) && !/Desafío/.test(await p.textContent('#inv-name')), 'IA difícil activa: ' + await p.textContent('#inv-name'));
-  const r2 = await playGame(p, 'dificil', { maxMs: 300000, pMan: 0.3 });
+  ok(/Difícil/.test(await p.textContent('#inv-name')), 'IA difícil activa: ' + await p.textContent('#inv-name'));
+  const r2 = await playGame(p, 'dificil', { maxMs: 400000, pMan: 0.3 });
   ok(r2.ended && !r2.notes.length, 'partida contra la difícil terminada (' + r2.turnNo + ' turnos, ' + r2.title + ')');
   ok(await p.evaluate(() => localStorage.getItem('parques.ai')) === 'dificil', 'la dificultad se recuerda');
+  await p.click('#rematch'); await p.waitForFunction(() => window.__parquesState().phase === 'place');
   ok(clean(g.log).length === 0, 'consola limpia ' + clean(g.log));
-  await shot(p, 'daily-end');
+  await shot(p, 'ai-end');
   await p.context().close();
 }
 
@@ -249,14 +242,11 @@ async function suiteModes() {
     s = await st(q);
     ok(s.rules === 'reloaded' && await q.evaluate(() => !!document.getElementById('act-dev').offsetParent) && s.pickups.length > 0, `${tag}: Reloaded con Maniobrar y tesoros`);
     await shot(q, `battle-reloaded-${tag}`);
-    // desafío del día: siempre Reloaded
+    // sin desafío del día: las reglas elegidas mandan siempre
     await q.evaluate(() => document.getElementById('back').click()); await wait(300);
-    await q.click('#rules [data-rules=clasico]');
-    ok(/Reloaded/.test(await q.textContent('#daily')), `${tag}: el desafío del día dice Reloaded`);
-    await q.click('#daily'); await q.waitForFunction(() => window.__parquesState().phase === 'place');
-    ok((await st(q)).rules === 'reloaded', `${tag}: el desafío se juega en Reloaded`);
-    await q.evaluate(() => document.getElementById('back').click()); await wait(300);
-    ok(await q.evaluate(() => document.querySelector('#rules .selected')?.dataset.rules) === 'clasico', `${tag}: después del desafío vuelve a lo elegido (Clásico)`);
+    ok(!(await q.$('#daily')) && !/Desafío del día/i.test(await q.textContent('body')), `${tag}: no queda rastro del desafío del día en el menú`);
+    await q.click('#rules [data-rules=clasico]'); await q.click('#start'); await q.waitForFunction(() => window.__parquesState().phase === 'place');
+    ok((await st(q)).rules === 'clasico', `${tag}: tras una partida Reloaded, elegir Clásico juega Clásico`);
     ok(clean(g2.log).length === 0, `${tag}: consola limpia ${clean(g2.log)}`);
     await g2.ctx.close();
   }
@@ -346,7 +336,7 @@ async function suiteGeo() {
   }
 }
 
-const suites = { geo: suiteGeo, modes: suiteModes, place: suitePlace, hud: suiteHud, touch: suiteTouch, daily: suiteDaily, tuto: suiteTuto, pvc: suitePvc, pvp: suitePvp };
+const suites = { geo: suiteGeo, modes: suiteModes, place: suitePlace, hud: suiteHud, touch: suiteTouch, ai: suiteAi, tuto: suiteTuto, pvc: suitePvc, pvp: suitePvp };
 for (const k of which === 'all' ? Object.keys(suites) : which.split(',')) await suites[k]();
 await b.close();
 console.log(fails.length ? `\n${fails.length} FALLAS` : '\nTODO OK', '· capturas en', OUT);

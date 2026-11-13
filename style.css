@@ -1020,10 +1020,6 @@ body.in-battle:not(.hud-open) #turnbar .act.shoot.boost small { display: block; 
 #hud-pill small::before { content: "· "; opacity: 0.6; }
 #hud-pill.soon small { opacity: 1; color: #fde047; }
 
-/* Desafío del día */
-.go.daily { display: flex; flex-direction: column; align-items: center; gap: 2px; background: linear-gradient(180deg, #f59e0b, #d97706); color: #1c1917; padding-top: 8px; padding-bottom: 8px; }
-.go.daily b { font: inherit; }
-.go.daily small { font-family: Nunito, sans-serif; font-size: 0.7rem; font-weight: 800; letter-spacing: 0; text-transform: none; opacity: 0.85; }
 #ai-block.hidden { display: none; }
 
 /* Colocación: ⟳ y ✓ flotando al lado de la unidad pendiente */

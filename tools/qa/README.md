@@ -7,7 +7,7 @@ tablero girado en pantallas anchas, link a Google Maps, PvC y PvP (en los dos mo
 ```bash
 cd tools/qa && npm install && npx playwright install chromium   # una vez
 cd ../.. && python3 -m http.server 8765 &                         # servir el juego
-node tools/qa/qa.mjs all          # o: modes | geo | place | hud | touch | daily | tuto | pvc | pvp (separados por coma)
+node tools/qa/qa.mjs all          # o: modes | geo | place | hud | touch | ai | tuto | pvc | pvp (separados por coma)
 RULES=clasico VP=desktop node tools/qa/qa.mjs pvp    # PvP de un solo modo, en escritorio
 PREFIX=antes node tools/qa/troops.mjs                # capturas de las tropas con colocación fija
 BASE=https://ondanueve.github.io/batalla-naval-parques/ node tools/qa/qa.mjs place,hud   # contra lo publicado

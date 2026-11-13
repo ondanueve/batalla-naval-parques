@@ -13,7 +13,6 @@ Las imágenes salen de `tools/geo/build.py` (zonas en `tools/geo/zones.json`), q
 - **Clásico** (por defecto): la batalla naval de siempre. Un disparo por turno, alternado, sin tiro extra al acertar. Nada se mueve, no hay tesoros ni escalada, y no se puede repetir una celda. Los hundidos se revelan y gana quien hunda toda la flota. La máquina caza y remata (en Difícil, con mapa de probabilidad).
 - **Reloaded**: todo lo de abajo (disparar o maniobrar, visión en vivo, tesoros, escalada, patrones en cruz y 3×3).
 - Se elige en el menú, antes de jugar. La elección dura la sesión (no se guarda en el navegador). En línea elige quien arma la sala; el invitado ve las reglas antes de estar listo y, si no coinciden, la partida se rechaza.
-- El **Desafío del día** se juega siempre en Reloaded, así el récord es comparable para todos.
 
 ## Cómo se juega
 
@@ -40,7 +39,7 @@ Las tropas (barcos, tanques y blindados) son siluetas vistas desde arriba dibuja
 
 `node tools/sim.js` juega miles de partidas máquina contra máquina para balancear reglas y personalidades. Resultados en `tools/sim-resultados.txt`. `node tools/sim-clasico.js` verifica las reglas del Clásico y la fuerza de la IA.
 
-QA con Playwright en `tools/qa` (ver su README): `node tools/qa/qa.mjs [modes|geo|place|hud|touch|daily|tuto|pvc|pvp|all]`. `tools/qa/troops.mjs` saca capturas de las tropas.
+QA con Playwright en `tools/qa` (ver su README): `node tools/qa/qa.mjs [modes|geo|place|hud|touch|ai|tuto|pvc|pvp|all]`. `tools/qa/troops.mjs` saca capturas de las tropas.
 
 ## Jukebox
 
