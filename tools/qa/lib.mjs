@@ -15,7 +15,8 @@ export async function mk(browser, opts = {}) {
   return { ctx, page, log };
 }
 export const st = (p) => p.evaluate(() => window.__parquesState());
-export async function setup(p, { map='nahuel', terrain='agua', mode='pvc', nation='chile' } = {}) {
+export async function setup(p, { map='nahuel', terrain='agua', mode='pvc', nation='chile', rules='reloaded' } = {}) {
+  if (rules) await p.click(`#rules [data-rules=${rules}]`);
   await p.click(`#maps [data-map=${map}]`);
   await p.click(`#terrains [data-terrain=${terrain}]`);
   await p.click(`#modes [data-mode=${mode}]`);

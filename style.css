@@ -1039,3 +1039,9 @@ body.in-battle:not(.hud-open) #turnbar .act.shoot.boost small { display: block; 
 #place-ctl #pc-ok:disabled { background: rgba(127, 29, 29, 0.6); border-color: rgba(255, 255, 255, 0.3); opacity: 0.7; cursor: not-allowed; }
 @media (prefers-reduced-motion: no-preference) { #place-ctl:not(.hidden) { animation: ctlIn .16s ease-out; } }
 @keyframes ctlIn { from { opacity: 0; transform: scale(.85); } }
+
+/* Reglas: Clásico (por defecto) o Reloaded */
+#rules-hint { min-height: 2.4em; }
+.steps li.hidden { display: none; }
+body.rules-clasico #turnbar { display: none !important; }
+#hud-pill.classic em:empty { display: none; }

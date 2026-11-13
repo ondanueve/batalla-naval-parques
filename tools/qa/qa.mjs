@@ -191,35 +191,98 @@ async function suiteTuto() {
 }
 
 async function suitePvc() {
-  console.log('PVC (bots contra la IA)');
-  const cfgs = [['mobile', 'nahuel', 'agua'], ['desktop', 'iguazu', 'tierra'], ['landscape', 'glaciares', 'mixto'], ['mobile', 'iguazu', 'mixto']];
-  const res = await Promise.all(cfgs.map(async ([vp, map, terrain], i) => {
-    const { page: p, log } = await newGame(VPS[vp], { map, terrain });
-    await placeAll(p); await p.click('#ready');
-    const r = await playGame(p, `${vp}-${map}-${terrain}`, { maxMs: 300000, pMan: 0.45 });
+  console.log('PVC (bots contra la IA, Clásico y Reloaded)');
+  const cfgs = [['mobile', 'nahuel', 'agua', 'clasico'], ['desktop', 'iguazu', 'tierra', 'clasico'], ['desktop', 'glaciares', 'mixto', 'reloaded'], ['landscape', 'iguazu', 'mixto', 'reloaded']];
+  const res = await Promise.all(cfgs.map(async ([vp, map, terrain, rules], i) => {
+    const { page: p, log } = await newGame(VPS[vp], { map, terrain, rules });
+    await placeAll(p); await p.click('#ready'); await waitAttack(p);
+    const s0 = await st(p);
+    const r = await playGame(p, `${rules}-${vp}-${map}-${terrain}`, { maxMs: 300000, pMan: 0.45, shootOnly: rules === 'clasico' });
+    const s1 = await st(p);
     await shot(p, `pvc-end-${i}`);
-    return { ...r, log: clean(log) };
+    return { ...r, rules, s0, s1, log: clean(log) };
   }));
-  res.forEach((r) => ok(r.ended && !r.notes.length && !r.log.length, `${r.tag}: terminó en ${r.turnNo} turnos (${r.shots} disparos, ${r.mover + r.vigilar + r.reparar + r.apuntar} maniobras) ${r.notes.join(',')} ${r.log.join(',')}`));
+  res.forEach((r) => {
+    ok(r.ended && !r.notes.length && !r.log.length && r.s0.rules === r.rules, `${r.tag}: terminó en ${r.turnNo} turnos (${r.shots} disparos, ${r.mover + r.vigilar + r.reparar + r.apuntar} maniobras) ${r.notes.join(',')} ${r.log.join(',')}`);
+    if (r.rules === 'clasico') ok(r.s1.pickups.length === 0 && r.s1.level === 0, `${r.tag}: clásico sin tesoros ni escalada (nivel ${r.s1.level}, ${r.s1.pickups.length} tesoros)`);
+  });
+}
+
+async function suiteModes() {
+  console.log('MODOS (Clásico por defecto / Reloaded)');
+  for (const tag of ['mobile', 'desktop']) {
+    const g = await mk(b, { viewport: VPS[tag] }); const p = g.page;
+    await p.goto(BASE); await p.waitForSelector('#start');
+    const sel = () => p.evaluate(() => document.querySelector('#rules .selected')?.dataset.rules);
+    ok(await sel() === 'clasico', `${tag}: Clásico elegido por defecto`);
+    ok(/de siempre/.test(await p.textContent('#rules-hint')), `${tag}: pista de Clásico`);
+    if (tag === 'mobile') await p.locator('#rules-block').screenshot({ path: OUT + 'rules-selector-mobile.png' });
+    await shot(p, `menu-rules-${tag}`);
+    await p.click('#rules [data-rules=reloaded]');
+    ok(/Disparar o maniobrar/.test(await p.textContent('#rules-hint')), `${tag}: pista de Reloaded`);
+    await p.reload(); await p.waitForSelector('#start');
+    ok(await sel() === 'reloaded', `${tag}: se recuerda en la sesión (recarga)`);
+    ok(await p.evaluate(() => Object.keys(localStorage).filter((k) => /rules|reglas|modo/i.test(k)).length === 0), `${tag}: nada de reglas en localStorage`);
+    await g.ctx.close();
+    const g2 = await mk(b, { viewport: VPS[tag] }); const q = g2.page;
+    await q.goto(BASE); await q.waitForSelector('#start');
+    ok(await q.evaluate(() => document.querySelector('#rules .selected')?.dataset.rules) === 'clasico', `${tag}: sesión nueva vuelve a Clásico`);
+    // batalla clásica: HUD aún más mínimo y sin repetir celdas
+    await setup(q, { map: 'nahuel', terrain: 'agua', rules: null }); await q.click('#start');
+    await placeAll(q); await q.click('#ready'); await waitAttack(q); await wait(500);
+    let s = await st(q);
+    const vis = await q.evaluate(() => ({ turnbar: !!document.getElementById('turnbar').offsetParent, war: document.getElementById('pill-war').textContent, next: document.getElementById('pill-next').textContent, coach: !document.getElementById('coach').classList.contains('hidden') }));
+    ok(s.rules === 'clasico' && !vis.turnbar && !vis.war && !vis.next && !vis.coach, `${tag}: clásico = solo la píldora ${JSON.stringify(vis)}`);
+    ok(s.pickups.length === 0, `${tag}: clásico sin tesoros`);
+    await clickCell(q, 0, 0); await waitAttack(q, 30000);
+    const t1 = (await st(q)).turnNo;
+    await clickCell(q, 0, 0); await wait(400);
+    s = await st(q);
+    ok(s.turnNo === t1 && s.phase === 'attack' && /ya disparaste/i.test(await q.textContent('#dialogue')), `${tag}: no se puede repetir una celda`);
+    await shot(q, `battle-clasico-${tag}`);
+    // reglas distintas desde el rival: se rechaza
+    await q.evaluate(() => window.__parquesInject({ t: 'ready', rules: 'reloaded' })); await wait(400);
+    ok(await q.evaluate(() => !document.getElementById('menu').classList.contains('hidden')) && /otras reglas/.test(await q.textContent('.lede')), `${tag}: reglas que no coinciden = se rechaza`);
+    // Reloaded: HUD con Disparar/Maniobrar
+    await setup(q, { map: 'glaciares', terrain: 'mixto', rules: 'reloaded' }); await q.click('#start');
+    await placeAll(q); await q.click('#ready'); await waitAttack(q); await wait(600);
+    s = await st(q);
+    ok(s.rules === 'reloaded' && await q.evaluate(() => !!document.getElementById('act-dev').offsetParent) && s.pickups.length > 0, `${tag}: Reloaded con Maniobrar y tesoros`);
+    await shot(q, `battle-reloaded-${tag}`);
+    // desafío del día: siempre Reloaded
+    await q.evaluate(() => document.getElementById('back').click()); await wait(300);
+    await q.click('#rules [data-rules=clasico]');
+    ok(/Reloaded/.test(await q.textContent('#daily')), `${tag}: el desafío del día dice Reloaded`);
+    await q.click('#daily'); await q.waitForFunction(() => window.__parquesState().phase === 'place');
+    ok((await st(q)).rules === 'reloaded', `${tag}: el desafío se juega en Reloaded`);
+    await q.evaluate(() => document.getElementById('back').click()); await wait(300);
+    ok(await q.evaluate(() => document.querySelector('#rules .selected')?.dataset.rules) === 'clasico', `${tag}: después del desafío vuelve a lo elegido (Clásico)`);
+    ok(clean(g2.log).length === 0, `${tag}: consola limpia ${clean(g2.log)}`);
+    await g2.ctx.close();
+  }
 }
 
 async function suitePvp() {
-  console.log('PVP');
+  for (const rules of (process.env.RULES || 'clasico,reloaded').split(',')) await pvpOnce(rules);
+}
+async function pvpOnce(rules) {
+  console.log('PVP ' + rules + ' ' + (process.env.VP || 'mobile'));
   const vp = VPS[process.env.VP || 'mobile'];
   const H = await mk(b, { viewport: vp }), J = await mk(b, { viewport: vp });
   await H.page.goto(BASE, { waitUntil: 'networkidle' });
-  await setup(H.page, { map: 'nahuel', terrain: 'mixto', nation: 'rusia', mode: 'pvp' });
+  await setup(H.page, { map: 'nahuel', terrain: 'mixto', nation: 'rusia', mode: 'pvp', rules });
   await H.page.click('#start');
   await H.page.waitForFunction(() => /\?sala=/.test(document.getElementById('link').value), null, { timeout: 30000 });
   const link = await H.page.inputValue('#link');
   await J.page.goto(link.replace(/^https?:\/\/[^/]+\/(batalla-naval-parques\/)?/, BASE), { waitUntil: 'domcontentloaded' });
   await J.page.waitForFunction(() => window.__parquesState && window.__parquesState().phase === 'place', null, { timeout: 40000 });
   ok((await st(J.page)).place.unplaced === 5, 'invitado coloca unidad por unidad');
+  ok((await st(J.page)).rules === rules && new RegExp(rules === 'clasico' ? 'Clásico' : 'Reloaded').test(await J.page.textContent('#place-msg')), `el invitado ve las reglas (${rules}) antes de estar listo`);
   await placeAll(H.page); await placeAll(J.page); await H.page.click('#ready'); await wait(800); await J.page.click('#ready'); await wait(1500);
   let a = await st(H.page), c = await st(J.page);
   ok([a.phase, c.phase].sort().join() === 'attack,defend', `arrancan sincronizados (${a.phase}/${c.phase})`);
   await shot(H.page, 'pvp-host-start'); await shot(J.page, 'pvp-join-start');
-  const [rh, rj] = await Promise.all([playGame(H.page, 'host', { maxMs: 700000, pMan: 0.3 }), playGame(J.page, 'joiner', { maxMs: 700000, pMan: 0.3 })]);
+  const [rh, rj] = await Promise.all([playGame(H.page, 'host', { maxMs: 700000, pMan: 0.3, shootOnly: rules === 'clasico' }), playGame(J.page, 'joiner', { maxMs: 700000, pMan: 0.3, shootOnly: rules === 'clasico' })]);
   a = await st(H.page); c = await st(J.page);
   ok(rh.ended && rj.ended && a.turnNo === c.turnNo, `partida completa, turnos iguales ${a.turnNo}/${c.turnNo}`);
   if (!(rh.ended && rj.ended)) {
@@ -231,17 +294,20 @@ async function suitePvp() {
     console.log('NET joiner\n' + (await J.page.evaluate(() => window.__parquesNet.join('\n'))));
     await b.close(); process.exit(1);
   }
-  ok(JSON.stringify(a.pickups) === JSON.stringify(c.pickups), 'tesoros iguales en ambos');
+  ok(JSON.stringify(a.pickups) === JSON.stringify(c.pickups) && a.rules === rules && c.rules === rules && (rules === 'reloaded' || a.pickups.length === 0), `reglas ${a.rules}/${c.rules} y tesoros iguales en ambos (${a.pickups.length})`);
+  await shot(H.page, `pvp-${rules}-host-end`);
   const rem = (pg) => pg.evaluate(() => { document.getElementById('juke-panel')?.classList.add('hidden'); document.getElementById('rematch').click(); });
   await rem(H.page); await wait(600); await rem(J.page); await wait(2500);
   ok((await st(H.page)).phase === 'place' && (await st(J.page)).place.unplaced === 5, 'revancha: se vuelve a colocar');
   await placeAll(H.page); await placeAll(J.page); await H.page.click('#ready'); await wait(800); await J.page.click('#ready'); await wait(2000);
   a = await st(H.page); c = await st(J.page);
   ok(a.turnNo === 0 && c.turnNo === 0 && JSON.stringify(a.pickups) === JSON.stringify(c.pickups), 'revancha arranca igual en ambos');
+  ok(a.rules === rules && c.rules === rules, `revancha con las mismas reglas (${a.rules}/${c.rules})`);
   ok(!clean(H.log).length && !clean(J.log).length, `consolas limpias ${clean(H.log)} ${clean(J.log)}`);
+  await H.ctx.close(); await J.ctx.close();
 }
 
-const suites = { place: suitePlace, hud: suiteHud, touch: suiteTouch, daily: suiteDaily, tuto: suiteTuto, pvc: suitePvc, pvp: suitePvp };
+const suites = { modes: suiteModes, place: suitePlace, hud: suiteHud, touch: suiteTouch, daily: suiteDaily, tuto: suiteTuto, pvc: suitePvc, pvp: suitePvp };
 for (const k of which === 'all' ? Object.keys(suites) : which.split(',')) await suites[k]();
 await b.close();
 console.log(fails.length ? `\n${fails.length} FALLAS` : '\nTODO OK', '· capturas en', OUT);

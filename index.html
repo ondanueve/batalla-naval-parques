@@ -56,6 +56,14 @@
           </div>
           <p class="hint" id="terrain-hint">Solo barcos, sobre agua. Tienen que entrar enteros y sin pisarse.</p>
         </div>
+        <div class="block" id="rules-block">
+          <h2>Reglas</h2>
+          <div class="row" id="rules" role="group" aria-label="Reglas">
+            <button type="button" class="seg selected" data-rules="clasico">Clásico</button>
+            <button type="button" class="seg" data-rules="reloaded">Reloaded</button>
+          </div>
+          <p class="hint" id="rules-hint"></p>
+        </div>
         <div class="block">
           <h2>Modo</h2>
           <div class="row" id="modes">
@@ -76,11 +84,12 @@
           <div class="row" id="nations"></div>
         </div>
         <ol class="steps">
-          <li>Grilla 10×20. Colocás tu flota unidad por unidad (mantené apretado para rotar): tenés 60 segundos y lo que falte se completa al azar. Estoy listo la cierra; en PvP arranca cuando los dos marcan, o al llegar a 0.</li>
+          <li>Grilla 10×20. Colocás tu flota unidad por unidad: tocá donde va, arrastrala, tocala para girarla y ✓ para dejarla. Tenés 60 segundos y lo que falte se completa al azar. Estoy listo la cierra; en PvP arranca cuando los dos marcan, o al llegar a 0.</li>
           <li>Agua: barcos. Tierra: tanques. Mixto: cada uno en lo suyo. Si se pisan o se salen, quedan en rojo y no se apoyan.</li>
-          <li>Cada turno elegís: <b>Disparar</b> (daño ahora) o <b>Maniobrar</b> (mover, vigilar, reparar o apuntar: no hace daño, pero rinde después). Es el dilema de ganar material o desarrollarse, como en el ajedrez.</li>
-          <li>Ves en vivo solo las zonas que vigilás o tus torres. Del resto te queda el mapa explorado: lo último que supiste, que puede estar viejo. Los tesoros del mapa se cobran moviendo una unidad encima.</li>
-          <li>La guerra escala: cada vez menos maniobras y más disparos en cruz y área. Nadie puede esperar para siempre.</li>
+          <li data-rules="clasico">Clásico: un disparo por turno, alternado. Nada se mueve y no se repite una celda. Gana quien hunda toda la flota enemiga.</li>
+          <li data-rules="reloaded">Cada turno elegís: <b>Disparar</b> (daño ahora) o <b>Maniobrar</b> (mover, vigilar, reparar o apuntar: no hace daño, pero rinde después). Es el dilema de ganar material o desarrollarse, como en el ajedrez.</li>
+          <li data-rules="reloaded">Ves en vivo solo las zonas que vigilás o tus torres. Del resto te queda el mapa explorado: lo último que supiste, que puede estar viejo. Los tesoros del mapa se cobran moviendo una unidad encima.</li>
+          <li data-rules="reloaded">La guerra escala: cada vez menos maniobras y más disparos en cruz y área. Nadie puede esperar para siempre.</li>
         </ol>
       </div>
       <footer class="dock">

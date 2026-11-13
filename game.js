@@ -74,7 +74,16 @@
     };
   });
 
-  const opts = { map: "nahuel", terrain: "agua", mode: "pvc", nation: "chile", crop: 0 };
+  const opts = { map: "nahuel", terrain: "agua", mode: "pvc", nation: "chile", crop: 0, rules: "clasico" };
+  // Reglas: Clásico por defecto. Se recuerda solo durante la sesión (nunca en localStorage).
+  const KEY_RULES = "parques.rules";
+  try { opts.rules = C.normMode(sessionStorage.getItem(KEY_RULES)); } catch (e) { opts.rules = "clasico"; }
+  const classic = () => opts.rules === "clasico";
+  const RULES_NAME = { clasico: "Clásico", reloaded: "Reloaded" };
+  function applyRules() {
+    document.body.classList.toggle("rules-clasico", classic());
+    document.body.classList.toggle("rules-reloaded", !classic());
+  }
   let match = null;
   let peer = null;
   let conn = null;
@@ -166,7 +175,7 @@
     requestAnimationFrame(fit);
   }
   function tutoStart() {
-    if (opts.mode !== "pvc") return;
+    if (opts.mode !== "pvc" || classic()) return;
     if (store.get(KEY_TUTO) && !tutoForce) return;
     tutoForce = false;
     tuto = { step: 0, pending: 0 };
@@ -277,6 +286,10 @@
         root.querySelectorAll("button").forEach((el) => el.classList.toggle("selected", el === b));
         if (key === "terrain") document.getElementById("terrain-hint").textContent = HINTS[opts.terrain];
         if (key === "map" || key === "terrain") applyTheme();
+        if (key === "rules") {
+          try { sessionStorage.setItem(KEY_RULES, opts.rules); } catch (e) { /* sin sesión */ }
+          paintRulesMenu();
+        }
         if (key === "mode") {
           document.getElementById("ai-block").classList.toggle("hidden", opts.mode === "pvp");
           document.getElementById("start").textContent = opts.mode === "pvp" ? "Crear enlace" : "Entrar al parque";
@@ -466,8 +479,19 @@
 
   function paintTurnbar(combat) {
     const sh = match.shared;
-    ui.turnbar.classList.toggle("hidden", !(combat && sh));
+    ui.turnbar.classList.toggle("hidden", !(combat && sh) || C.isClassic(sh));
     if (!combat || !sh) return;
+    if (C.isClassic(sh)) {
+      // Clásico: solo la píldora (de quién es el turno y cuánta flota queda a cada lado)
+      const pillC = document.getElementById("hud-pill");
+      const mineC = match.phase === "attack";
+      pillC.className = "l0 classic" + (mineC ? " mine" : "") + (pillC.classList.contains("hint") ? " hint" : "");
+      document.getElementById("pill-turn").textContent = mineC ? "Tu turno" : match.phase === "defend" ? "Turno rival" : "Disparo…";
+      document.getElementById("pill-war").textContent = "";
+      document.getElementById("pill-next").textContent = "";
+      document.getElementById("pill-hp").textContent = hpOf(match.local, match.hitsOnLocal).left + " vs " + foeHp().left;
+      return;
+    }
     const lvl = C.warLevel(sh);
     const round = C.roundOf(sh);
     ui.warmeter.className = "l" + lvl;
@@ -617,6 +641,7 @@
       main = "Flota cerrada.";
       sub = "Esperando al rival…";
     }
+    if (sub && (placing || waitingReady)) sub = RULES_NAME[opts.rules] + " · " + sub;
     const a = box.firstElementChild, b = box.lastElementChild;
     if (a.textContent !== main) a.textContent = main;
     if (b.textContent !== sub) b.textContent = sub;
@@ -2107,7 +2132,7 @@
     if (opts.mode !== "pvp") return;
     if (!published) {
       published = true;
-      send({ t: force ? "go" : "ready", force: !!force });
+      send({ t: force ? "go" : "ready", force: !!force, rules: opts.rules });
       return;
     }
     if (force) send({ t: "go", force: true });
@@ -2129,7 +2154,7 @@
     stopClock();
     hudDirty = true;
     const seed = opts.mode === "pvp" || opts.daily ? ((opts.seed >>> 0) || 1) : Math.floor(Math.random() * 4294967296);
-    match.shared = C.newShared(seed, opts.terrain, opts.map, opts.crop);
+    match.shared = C.newShared(seed, opts.terrain, opts.map, opts.crop, opts.rules);
     match.lastLevel = 0;
     if (opts.mode !== "pvp") {
       const pers = opts.daily ? C.PERSONALITIES[seed % C.PERSONALITIES.length] : C.PERSONALITIES[Math.floor(Math.random() * C.PERSONALITIES.length)];
@@ -2141,16 +2166,23 @@
         p: { arg: match.meP, inv: { side: match.foeSide, know: C.newKnow(), pers, consec: 0 } }
       };
       const nation = C.NATIONS[opts.nation];
-      document.getElementById("inv-name").textContent = nation.flag + " " + nation.name.toUpperCase() + " · " + C.PERS_LABEL[pers] + (match.hard ? " · Difícil" : "") + (opts.daily ? " · Desafío del día" : "");
+      document.getElementById("inv-name").textContent = nation.flag + " " + nation.name.toUpperCase() + " · " + (classic() ? "Clásico" : C.PERS_LABEL[pers]) + (match.hard ? " · Difícil" : "") + (opts.daily ? " · Desafío del día" : "");
       match.phase = "attack";
       tutoEvent("ready");
+      if (classic()) {
+        say("Clásico: tocá una celda del parque enemigo para disparar. Un tiro por turno; gana quien hunda toda la flota.");
+        requestAnimationFrame(fit);
+        hudDirty = true;
+        return;
+      }
       say((opts.daily ? "Desafío del día. " : "") + "Invasor " + C.PERS_LABEL[pers].toLowerCase() + (match.hard ? " (difícil)" : "") + ": " + PERS_BLURB[pers] + ". Tu turno: disparás o maniobrás.");
       requestAnimationFrame(fit);
       hudDirty = true;
       return;
     }
     match.phase = match.role === "arg" ? "attack" : "defend";
-    say(match.role === "arg"
+    if (classic()) say(match.role === "arg" ? "Clásico: empezás vos. Tocá una celda del parque enemigo para disparar." : "Clásico: Argentina dispara primero. Después te toca a vos.");
+    else say(match.role === "arg"
       ? "Nadie sabe dónde está nadie. Empezás vos: disparás o maniobrás."
       : "Argentina juega primero. Mirá tu parque: ahí vas a ver qué hace.");
     requestAnimationFrame(fit);
@@ -2454,7 +2486,10 @@
 
   async function cellAction(cell) {
     if (!match || match.phase !== "attack") return;
-    if (sel.mode === "shoot") return takeAction({ t: "shot", cell: { x: cell.x, y: cell.y } });
+    if (sel.mode === "shoot") {
+      if (C.isClassic(match.shared) && match.know.marks.has(C.key(cell.x, cell.y))) { say("Ahí ya disparaste. Elegí otra celda."); return; }
+      return takeAction({ t: "shot", cell: { x: cell.x, y: cell.y } });
+    }
     if (sel.mode === "watch") return takeAction({ t: "watch", x: cell.x, y: cell.y });
     if (sel.mode === "menu") { say("Elegí una maniobra: Mover, Vigilar, Reparar o Apuntar."); return; }
     if (sel.mode === "repair") {
@@ -2570,6 +2605,7 @@
   }
 
   function turnHint() {
+    if (C.isClassic(match.shared)) return "Tocá una celda del parque enemigo para disparar.";
     const lvl = C.warLevel(match.shared);
     if (lvl >= 3) return "Bombardeo: solo disparos, en área 3×3.";
     return "Disparar da daño ahora. Maniobrar no hace daño, pero rinde después.";
@@ -2624,7 +2660,7 @@
       match.shotT = sh.turnNo;
       me.consec = 0;
       C.advance(sh, who, "shot");
-      msg = { t: "fire", shots: pat.cells, keep, spot: mySpot() };
+      msg = { t: "fire", shots: pat.cells, keep, spot: mySpot(), rules: opts.rules };
       match.pattern = pat;
     } else {
       if (act.t === "move") {
@@ -2647,6 +2683,7 @@
       }
       me.consec++;
       msg.spot = mySpot();
+      msg.rules = opts.rules;
     }
     match.keepNext = keep;
     send(msg);
@@ -2867,7 +2904,7 @@
   function parkName() { return (C.MAPS[opts.map] || {}).name || "el parque"; }
   function challengeUrl() {
     const path = location.pathname.endsWith("/") ? location.pathname : location.pathname.replace(/[^/]*$/, "");
-    return location.origin + path + "?parque=" + opts.map + "&terreno=" + opts.terrain + "&invasor=" + opts.nation;
+    return location.origin + path + "?parque=" + opts.map + "&terreno=" + opts.terrain + "&invasor=" + opts.nation + (classic() ? "" : "&reglas=reloaded");
   }
   function accuracyOf(stt) { return stt.cells ? Math.round((stt.hits / stt.cells) * 100) : 0; }
   function fmtTime(ms) {
@@ -2890,10 +2927,11 @@
       "st-acc": accuracyOf(stt) + "%",
       "st-sunk": stt.sunk + "/" + (match.remote ? match.remote.length : fleet),
       "st-taken": stt.taken + "/17",
-      "st-turns": stt.man,
+      "st-turns": classic() ? stt.turns : stt.man,
       "st-time": "×" + (stt.bestStreak || 0)
     };
     Object.keys(vals).forEach((id) => { document.getElementById(id).textContent = String(vals[id]); });
+    document.getElementById("st-turns").nextElementSibling.textContent = classic() ? "Turnos" : "Maniobras";
     document.getElementById("end-kicker").textContent = win ? "VICTORIA" : "DERROTA";
     ui.end.classList.toggle("win", !!win);
     ui.end.classList.toggle("lose", !win);
@@ -2935,7 +2973,7 @@
   function hostRematchGo() {
     opts.crop = Math.floor(Math.random() * 5);
     opts.seed = Math.floor(Math.random() * 4294967296);
-    send({ t: "rematchgo", crop: opts.crop, seed: opts.seed });
+    send({ t: "rematchgo", crop: opts.crop, seed: opts.seed, rules: opts.rules });
     startRematch();
   }
   async function onShare() {
@@ -2994,6 +3032,7 @@
   function onData(msg) {
     if (!msg || !msg.t) return;
     if (msg.t !== "here" && msg.t !== "hello") netNote("<", msg);
+    if (msg.t === "clash") { showMenu(); noteMenu(typeof msg.why === "string" ? msg.why.slice(0, 160) : "El rival canceló: las reglas no coinciden."); return; }
     if (msg.t === "here") {
       sendHello();
       if (match && match.phase === "lobby") beginPlace();
@@ -3009,13 +3048,19 @@
       if (C.NATIONS[msg.nation]) opts.nation = msg.nation;
       if (typeof msg.crop === "number") opts.crop = ((msg.crop % 5) + 5) % 5;
       if (typeof msg.seed === "number") opts.seed = msg.seed >>> 0;
+      // las reglas las elige quien arma la sala; una sala sin reglas es de otra versión del juego
+      if (!C.MODES.includes(msg.rules)) { rulesClash("La sala viene de otra versión del juego. Pedile al rival que recargue la página."); return; }
+      opts.rules = msg.rules;
+      applyRules();
       applyTheme();
       freshMatch("inv");
       showBattle();
       beginPlace();
+      say("Reglas de esta sala: " + RULES_NAME[opts.rules] + (classic() ? " (un tiro por turno, nada se mueve)." : " (disparar o maniobrar, tesoros y escalada)."));
       return;
     }
     if (msg.t === "ready" || msg.t === "go") {
+      if (msg.rules !== opts.rules) { rulesClash("El rival juega con otras reglas (" + (RULES_NAME[msg.rules] || "otra versión") + "). Recarguen la página y armen la sala de nuevo."); return; }
       remoteReady = true;
       if (msg.t === "go" || msg.force) remoteForced = true;
       if (remoteForced && match && !battleStarted && (match.phase === "place" || match.phase === "sealed")) {
@@ -3038,12 +3083,14 @@
     }
     if (msg.t === "rematchgo") {
       if (match && match.phase === "end" && rematch.me && match.role === "inv") {
+        if (msg.rules !== opts.rules) { rulesClash("La revancha usa otras reglas. Volvé al menú y armen otra sala."); return; }
         if (typeof msg.crop === "number") opts.crop = ((msg.crop % 5) + 5) % 5;
         if (typeof msg.seed === "number") opts.seed = msg.seed >>> 0;
         startRematch();
       }
       return;
     }
+    if ((msg.t === "fire" || msg.t === "man") && msg.rules !== opts.rules) { rulesClash("Las reglas no coinciden con las del rival. Partida cancelada."); return; }
     if (msg.t === "fire") lock(() => handleFire(msg));
     if (msg.t === "resolved") lock(() => handleResolved(msg));
     if (msg.t === "man") lock(() => handleMan(msg));
@@ -3090,8 +3137,18 @@
     c.on("open", run);
   }
 
+  let clashed = false;
+  function rulesClash(why) {
+    if (clashed) return;
+    clashed = true;
+    send({ t: "clash", why });
+    showMenu();
+    noteMenu(why);
+    clashed = false;
+  }
+
   function sendHello() {
-    send({ t: "hello", map: opts.map, terrain: opts.terrain, nation: opts.nation, crop: opts.crop || 0, seed: opts.seed >>> 0 });
+    send({ t: "hello", map: opts.map, terrain: opts.terrain, nation: opts.nation, crop: opts.crop || 0, seed: opts.seed >>> 0, rules: opts.rules });
   }
 
   function noteMenu(text) {
@@ -3218,14 +3275,15 @@
     const b = document.getElementById("daily");
     if (!b) return;
     const r = dailyRec(dailyKey());
-    b.querySelector("small").textContent = r.best ? "Tu récord de hoy: " + plural(r.best.turns, "turno", "turnos")
-      : r.tries ? plural(r.tries, "intento", "intentos") + " hoy · todavía sin ganar" : "El mismo parque y el mismo invasor para todos, hoy";
+    b.querySelector("small").textContent = "Reloaded · " + (r.best ? "Tu récord de hoy: " + plural(r.best.turns, "turno", "turnos")
+      : r.tries ? plural(r.tries, "intento", "intentos") + " hoy · todavía sin ganar" : "el mismo parque y el mismo invasor para todos, hoy");
   }
   function startDaily() {
     const key = dailyKey();
     const seed = hashStr("parques-" + key);
     const r = C.mulberry32(seed);
-    if (!preDaily) preDaily = { map: opts.map, terrain: opts.terrain, nation: opts.nation, mode: opts.mode };
+    if (!preDaily) preDaily = { map: opts.map, terrain: opts.terrain, nation: opts.nation, mode: opts.mode, rules: opts.rules };
+    opts.rules = "reloaded"; // el desafío del día es siempre Reloaded: un solo récord comparable para todos
     opts.map = ["nahuel", "iguazu", "glaciares"][Math.floor(r() * 3)];
     opts.terrain = ["agua", "tierra", "mixto"][Math.floor(r() * 3)];
     const nats = Object.keys(C.NATIONS);
@@ -3264,6 +3322,7 @@
     }
     opts.crop = daily ? opts.daily.crop : Math.floor(Math.random() * 5);
     opts.seed = daily ? opts.daily.seed : Math.floor(Math.random() * 4294967296);
+    applyRules();
     applyTheme();
     if (opts.mode === "pvp") {
       if (!window.Peer) {
@@ -3383,6 +3442,16 @@
   selectGroup(document.getElementById("maps"), "map", "map");
   selectGroup(document.getElementById("terrains"), "terrain", "terrain");
   selectGroup(document.getElementById("modes"), "mode", "mode");
+  selectGroup(document.getElementById("rules"), "rules", "rules");
+  function paintRulesMenu() {
+    document.querySelectorAll("#rules button").forEach((b) => b.classList.toggle("selected", b.dataset.rules === opts.rules));
+    const h = document.getElementById("rules-hint");
+    if (h) h.textContent = classic() ? "La batalla naval de siempre: un tiro por turno, nada se mueve. Gana quien hunda toda la flota."
+      : "Disparar o maniobrar: mover, vigilar, reparar, apuntar, tesoros y una guerra que escala.";
+    document.querySelectorAll(".steps [data-rules]").forEach((li) => li.classList.toggle("hidden", li.dataset.rules !== opts.rules));
+    applyRules();
+  }
+  paintRulesMenu();
   buildNations();
   document.getElementById("start").addEventListener("click", () => startGame());
   document.getElementById("daily").addEventListener("click", () => startDaily());
@@ -3502,6 +3571,8 @@
   document.getElementById("how").addEventListener("click", () => {
     const pvc = document.querySelector("#modes [data-mode=pvc]");
     if (pvc) pvc.click();
+    const rl = document.querySelector("#rules [data-rules=reloaded]");
+    if (rl && classic()) rl.click(); // el tutorial enseña Reloaded
     tutoForce = true;
     startGame();
   });
@@ -3516,6 +3587,7 @@
     if (C.MAPS[pk]) click("#maps [data-map=" + pk + "]");
     if (C.FLEETS[tr]) click("#terrains [data-terrain=" + tr + "]");
     if (C.NATIONS[inv]) click("#nations [data-nation=" + inv + "]");
+    if (q.get("reglas") === "reloaded") click("#rules [data-rules=reloaded]");
     const lede = document.querySelector(".lede");
     if (lede) lede.textContent = "Te desafiaron en " + parkName() + " (" + opts.terrain + "). ¿Aceptás?";
   }
@@ -3548,7 +3620,9 @@
   wireJuke();
   applyTheme();
 
+  window.__parquesInject = (msg) => onData(msg); // QA: simular un mensaje del rival
   window.__parquesState = () => match ? ({
+    rules: match.shared ? match.shared.mode : opts.rules,
     phase: match.phase,
     view: viewKind(),
     hudOpen: document.body.classList.contains("hud-open"),
