@@ -388,7 +388,7 @@
 
   function newShared(seed, terrain, map, crop, mode) {
     const shared = {
-      seed: seed >>> 0, terrain, map, crop: crop || 0, turnNo: 0, nextId: 1, mode: normMode(mode),
+      seed: seed >>> 0, terrain, map, crop: crop || 0, turnNo: 0, nextId: 1, mode: mode === "clasico" ? "clasico" : "reloaded",
       pickups: [], zones: [], log: [], lastChange: { arg: 0, inv: 0 }
     };
     if (shared.mode === "clasico") return shared;
