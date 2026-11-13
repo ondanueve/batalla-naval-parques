@@ -81,18 +81,24 @@
   const classic = () => opts.rules === "clasico";
   const RULES_NAME = { clasico: "Clásico", reloaded: "Reloaded" };
   // link discreto al sector real del mapa (Google Maps, vista satelital, pestaña nueva)
-  function geoUrl(id) {
-    const g = C.MAPS[id] && C.MAPS[id].geo;
-    if (!g) return "https://www.google.com/maps";
-    return "https://www.google.com/maps/@" + g.lat + "," + g.lng + "," + g.z + "z/data=!3m1!1e3";
+  // un solo link por mapa: el centro de la franja que forman los dos tableros, con zoom para verlos a ambos
+  function geoNow() {
+    const inGame = !!match && !ui.battle.classList.contains("hidden");
+    return C.geoView(opts.map, opts.terrain, inGame ? (opts.crop || 0) : 2);
+  }
+  function geoUrl() {
+    const v = geoNow();
+    if (!v) return "https://www.google.com/maps";
+    return "https://www.google.com/maps/@" + v.lat + "," + v.lng + "," + v.z + "z/data=!3m1!1e3";
   }
   function paintGeo() {
     const g = C.MAPS[opts.map] && C.MAPS[opts.map].geo;
+    const v = geoNow();
     ["map-geo", "board-geo"].forEach((id) => {
       const a = document.getElementById(id);
       if (!a) return;
-      a.href = geoUrl(opts.map);
-      if (g) a.title = g.sector + " · " + g.lat + ", " + g.lng + " (Google Maps, pestaña nueva)";
+      a.href = geoUrl();
+      if (v) a.title = (g ? g.sector + " · " : "") + "los dos tableros: " + v.km[0] + " × " + v.km[1] + " km, centro " + v.lat + ", " + v.lng + " (Google Maps, pestaña nueva)";
     });
     const m = document.getElementById("map-geo");
     if (m && g) m.textContent = "Ver " + g.sector + " en Google Maps ↗";
@@ -303,7 +309,7 @@
         root.querySelectorAll("button").forEach((el) => el.classList.toggle("selected", el === b));
         if (key === "terrain") document.getElementById("terrain-hint").textContent = HINTS[opts.terrain];
         if (key === "map" || key === "terrain") applyTheme();
-        if (key === "map") paintGeo();
+        if (key === "map" || key === "terrain") paintGeo();
         if (key === "rules") {
           try { sessionStorage.setItem(KEY_RULES, opts.rules); } catch (e) { /* sin sesión */ }
           paintRulesMenu();
@@ -359,6 +365,7 @@
     ui.battle.classList.add("hidden");
     ui.menu.classList.remove("hidden");
     dailyLabel();
+    paintGeo();
     ui.stage.classList.remove("under-fire", "shake");
     cancelAnimationFrame(raf);
     raf = 0;
@@ -684,8 +691,12 @@
     return { x: g.padL + x * g.cellW, y: g.padT + y * g.cellH };
   }
 
+  // cada lado juega en su propio rectángulo geográfico (contiguos: Argentina al sur, el invasor al norte)
+  function myBoard() { return C.boardKey(opts.crop, match ? match.role : "arg"); }
+  function foeBoard() { return C.boardKey(opts.crop, match ? C.other(match.role) : "inv"); }
+  function viewBoard() { return viewKind() === "local" ? myBoard() : foeBoard(); }
   function isLand(x, y) {
-    return C.isLand(opts.terrain, opts.map, opts.crop, x, y);
+    return C.isLand(opts.terrain, opts.map, viewBoard(), x, y);
   }
 
   function asset(path) {
@@ -695,7 +706,7 @@
   }
 
   function parkImage() {
-    const id = (opts.map || "nahuel") + "-" + (opts.terrain || "agua") + "-" + ((opts.crop || 0) % 5);
+    const id = (opts.map || "nahuel") + "-" + (opts.terrain || "agua") + "-" + viewBoard();
     if (!mapImgs[id]) {
       const img = new Image();
       img.src = asset("maps/" + id + ".jpg");
@@ -858,6 +869,7 @@
         }
       }
     }
+    drawFrontier(g, gw, gh);
     // grid: one soft dark line under one thin light line, so the map stays bright
     ctx.beginPath();
     for (let x = 0; x <= C.W; x++) { ctx.moveTo(g.padL + x * g.cellW, g.padT); ctx.lineTo(g.padL + x * g.cellW, g.padT + gh); }
@@ -1189,6 +1201,40 @@
     } else {
       drawShipHull(g, ship, base, accent);
     }
+    ctx.restore();
+  }
+
+  // frontera: el borde del tablero pegado al otro rectángulo (sutil; el sur es Argentina, el norte el invasor)
+  function drawFrontier(g, gw, gh) {
+    if (!match) return;
+    const south = /a$/.test(viewBoard());
+    const y = south ? g.padT : g.padT + gh;
+    const depth = g.cellH * 0.55;
+    ctx.save();
+    const lg = ctx.createLinearGradient(0, y, 0, south ? y + depth : y - depth);
+    lg.addColorStop(0, "rgba(253, 224, 71, .28)");
+    lg.addColorStop(1, "rgba(253, 224, 71, 0)");
+    ctx.fillStyle = lg;
+    ctx.fillRect(g.padL, south ? y : y - depth, gw, depth);
+    ctx.strokeStyle = "rgba(253, 224, 71, .6)";
+    ctx.lineWidth = Math.max(1.5, 1.6 * g.dpr);
+    ctx.setLineDash([6 * g.dpr, 5 * g.dpr]);
+    ctx.beginPath(); ctx.moveTo(g.padL, y + (south ? 1 : -1)); ctx.lineTo(g.padL + gw, y + (south ? 1 : -1)); ctx.stroke();
+    ctx.setLineDash([]);
+    const mine = viewKind() === "local";
+    // girado: el borde norte/sur queda a izquierda/derecha de la pantalla; la etiqueta va abajo, sobre el dock
+    const arrow = rotView ? (south ? "◀ " : "▶ ") : (south ? "▲ " : "▼ ");
+    const label = arrow + (mine ? "frontera: allá está el enemigo" : "frontera: allá está tu territorio");
+    ctx.font = "800 " + Math.max(9, Math.floor(Math.min(g.cellW, g.cellH) * 0.24)) + "px Nunito, sans-serif";
+    ctx.textAlign = rotView ? (south ? "left" : "right") : "right";
+    ctx.textBaseline = rotView ? "bottom" : (south ? "top" : "bottom");
+    ctx.globalAlpha = 0.72;
+    ctx.lineWidth = 3 * g.dpr;
+    ctx.strokeStyle = "rgba(2,6,23,.75)";
+    const lx = rotView ? g.padL + 6 * g.dpr : g.padL + gw - 6 * g.dpr, ly = south ? y + 4 * g.dpr : y - 4 * g.dpr;
+    ctx.strokeText(label, lx, ly);
+    ctx.fillStyle = "#fde68a";
+    ctx.fillText(label, lx, ly);
     ctx.restore();
   }
 
@@ -1630,7 +1676,7 @@
         };
         const issue = C.placeIssue(
           match.local, ghost.x, ghost.y, ghost.size, ghost.horizontal,
-          hand.ship.id, ghost.kind, opts.terrain, opts.map, opts.crop
+          hand.ship.id, ghost.kind, opts.terrain, opts.map, myBoard()
         );
         drawHull(g, ghost, 0.92, issue ? "#f87171" : "#4ade80");
         if (issue) {
@@ -2244,13 +2290,13 @@
 
   function freshMatch(role) {
     let local;
-    try { local = C.placeRandom(opts.terrain, Math.random, opts.map, opts.crop); }
-    catch (e) { local = C.placeRandom(opts.terrain, Math.random, opts.map, opts.crop); }
+    try { local = C.placeRandom(opts.terrain, Math.random, opts.map, myBoard()); }
+    catch (e) { local = C.placeRandom(opts.terrain, Math.random, opts.map, myBoard()); }
     let remote = null;
     if (role === "arg" && opts.mode === "pvc") {
       const fr = opts.daily ? C.mulberry32(opts.daily.seed ^ 0xa5a5a5) : Math.random;
-      try { remote = C.placeRandom(opts.terrain, fr, opts.map, opts.crop); }
-      catch (e) { remote = C.placeRandom(opts.terrain, Math.random, opts.map, opts.crop); }
+      try { remote = C.placeRandom(opts.terrain, fr, opts.map, foeBoard()); }
+      catch (e) { remote = C.placeRandom(opts.terrain, Math.random, opts.map, foeBoard()); }
     }
     match = {
       role,
@@ -2299,6 +2345,7 @@
   }
 
   function beginPlace() {
+    paintGeo();
     match.phase = "place";
     sealed = false;
     battleStarted = false;
@@ -2467,9 +2514,9 @@
   function autoFill() {
     if (!match) return;
     if (!match.local.some((u) => u.unplaced)) return;
-    if (!C.placeRemaining(match.local, opts.terrain, Math.random, opts.map, opts.crop)) {
+    if (!C.placeRemaining(match.local, opts.terrain, Math.random, opts.map, myBoard())) {
       // hueco imposible con lo que puso el jugador: se rearma todo al azar
-      const fresh = C.placeRandom(opts.terrain, Math.random, opts.map, opts.crop);
+      const fresh = C.placeRandom(opts.terrain, Math.random, opts.map, myBoard());
       match.local.forEach((u) => {
         const f = fresh.find((q) => q.id === u.id);
         u.x = f.x; u.y = f.y; u.horizontal = f.horizontal; u.unplaced = false; u.lifted = false;
@@ -2535,7 +2582,7 @@
     if (!hand || !match) return "borde";
     return C.placeIssue(
       match.local, x, y, hand.ship.size, hand.horizontal,
-      hand.ship.id, hand.ship.kind, opts.terrain, opts.map, opts.crop
+      hand.ship.id, hand.ship.kind, opts.terrain, opts.map, myBoard()
     );
   }
 

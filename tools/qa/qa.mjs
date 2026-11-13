@@ -308,30 +308,37 @@ async function pvpOnce(rules) {
 }
 
 async function suiteGeo() {
-  console.log('LINK A GOOGLE MAPS');
-  const want = { nahuel: '-40.9531,-71.5381', iguazu: '-25.693,-54.44', glaciares: '-50.4714,-73.0465' };
+  console.log('LINK A GOOGLE MAPS (uno por mapa, centro de los dos tableros contiguos)');
+  const exp = (p, m, t, c) => p.evaluate(([m, t, c]) => { const v = window.ParquesCore.geoView(m, t, c); return 'https://www.google.com/maps/@' + v.lat + ',' + v.lng + ',' + v.z + 'z/data=!3m1!1e3'; }, [m, t, c]);
   for (const tag of ['mobile', 'desktop']) {
     const g = await mk(b, { viewport: VPS[tag] }); const p = g.page;
     await p.goto(BASE); await p.waitForSelector('#start');
-    for (const m of Object.keys(want)) {
-      await p.click(`#maps [data-map=${m}]`);
-      const a = await p.evaluate(() => { const e = document.getElementById('map-geo'); return { href: e.href, target: e.target, rel: e.rel, text: e.textContent, vis: !!e.offsetParent }; });
-      ok(a.vis && a.href.startsWith('https://www.google.com/maps/@' + want[m] + ',') && a.target === '_blank' && /noopener/.test(a.rel), `${tag}: menú ${m} → ${a.href} («${a.text}»)`);
+    for (const m of ['nahuel', 'iguazu', 'glaciares']) for (const t of ['agua', 'tierra', 'mixto']) {
+      await p.click(`#maps [data-map=${m}]`); await p.click(`#terrains [data-terrain=${t}]`);
+      const a = await p.evaluate(() => { const e = document.getElementById('map-geo'); return { href: e.href, target: e.target, rel: e.rel, text: e.textContent, vis: !!e.offsetParent, n: document.querySelectorAll('a[href*="google.com/maps"]:not(.hidden)').length }; });
+      const want = await exp(p, m, t, 2);
+      ok(a.vis && a.href === want && a.target === '_blank' && /noopener/.test(a.rel), `${tag}: menú ${m}/${t} → ${a.href}`);
     }
-    await p.click('#maps [data-map=iguazu]');
+    await p.click('#maps [data-map=iguazu]'); await p.click('#terrains [data-terrain=mixto]');
     await p.locator('#map-geo').scrollIntoViewIfNeeded();
     await shot(p, `geo-menu-${tag}`);
-    // pestaña nueva de verdad (sin cargar Google: se corta la navegación)
     await g.ctx.route('https://www.google.com/**', (r) => r.fulfill({ status: 200, body: 'ok' }));
     const [pop] = await Promise.all([g.ctx.waitForEvent('page'), p.click('#map-geo')]);
-    ok(/google\.com\/maps\/@-25\.693,-54\.44,14z/.test(pop.url()), `${tag}: abre pestaña nueva ${pop.url()}`); await pop.close();
+    ok(pop.url() === await exp(p, 'iguazu', 'mixto', 2), `${tag}: abre pestaña nueva ${pop.url()}`); await pop.close();
     await setup(p, { map: 'iguazu', terrain: 'mixto', rules: 'clasico' }); await p.click('#start');
     await p.waitForFunction(() => document.body.classList.contains('placing')); await wait(200);
     ok(!(await p.isVisible('#board-geo')), `${tag}: en colocación el link no aparece`);
+    await shot(p, `tablero-propio-${tag}`);
     await placeAll(p); await p.click('#ready'); await waitAttack(p); await wait(500);
     ok(!(await p.isVisible('#board-geo')), `${tag}: en batalla plegada no aparece (no tapa celdas)`);
+    await shot(p, `tablero-enemigo-${tag}`);
+    const st = await p.evaluate(() => window.__parquesState());
+    const img = await p.evaluate(() => [...document.querySelectorAll('img')].map((i) => i.src).concat(performance.getEntriesByType('resource').map((r) => r.name)).filter((u) => /maps\/iguazu-mixto-\d[ab]\.jpg/.test(u)));
+    const k = st.crop;
+    ok(img.some((u) => u.includes(`-${k}a.jpg`)) && img.some((u) => u.includes(`-${k}b.jpg`)), `${tag}: cargó los dos rectángulos contiguos ${k}a (propio) y ${k}b (enemigo)`);
     await p.click('#hud-pill'); await wait(400);
-    ok(await p.isVisible('#board-geo') && /-25\.693,-54\.44/.test(await p.getAttribute('#board-geo', 'href')), `${tag}: con el panel abierto, link discreto junto al nombre del parque`);
+    const bh = await p.getAttribute('#board-geo', 'href');
+    ok(await p.isVisible('#board-geo') && bh === await exp(p, 'iguazu', 'mixto', k), `${tag}: con el panel abierto, un solo link al centro de ambos ${bh}`);
     await shot(p, `geo-battle-${tag}`);
     await p.click('#hud-pill'); await wait(300);
     ok(clean(g.log).length === 0, `${tag}: consola limpia ${clean(g.log)}`);

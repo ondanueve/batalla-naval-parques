@@ -2,7 +2,11 @@
 
 Batalla territorial en los parques nacionales argentinos. Un jugador es siempre Argentina. El otro es un invasor: Chile, Reino Unido, EE.UU., China, Rusia o Brasil.
 
-Tres mapas: Nahuel Huapi, Iguazú y Los Glaciares. El terreno puede ser agua, tierra o mixto. Cada mapa tiene un link discreto a su sector real en Google Maps (vista satelital, pestaña nueva): Isla Victoria (-40.9531, -71.5381), Garganta del Diablo (-25.693, -54.44) y el frente del glaciar Perito Moreno (-50.4714, -73.0465).
+Tres mapas: Nahuel Huapi, Iguazú y Los Glaciares. El terreno puede ser agua, tierra o mixto.
+
+**Tableros contiguos.** Tu tablero y el del enemigo son dos rectángulos geográficos reales, pegados uno al otro y nunca iguales: Argentina defiende el sector sur (`…-Na.jpg`) y el invasor el sector norte (`…-Nb.jpg`), con frontera común. Cada rectángulo es el fondo de su tablero y un borde dorado punteado marca de qué lado está el otro territorio. Cada partida usa uno de 5 pares por mapa y terreno; en PvP ambos lados ven el mismo par. Hay un solo link por mapa a Google Maps (vista satelital, pestaña nueva), centrado en el rectángulo que forman los dos sectores juntos y con un zoom que muestra ambos.
+
+Las imágenes salen de `tools/geo/build.py` (zonas en `tools/geo/zones.json`), que también regenera la tabla `BOARDS` de `core.js` con la máscara agua/tierra de cada tablero. Créditos: imágenes satelitales *Sentinel-2 cloudless* – https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016), licencia CC BY 4.0; polígonos de agua para Nahuel Huapi e Iguazú © colaboradores de OpenStreetMap (ODbL), en Los Glaciares la máscara sale del color de la imagen.
 
 ## Reglas: Clásico o Reloaded
 

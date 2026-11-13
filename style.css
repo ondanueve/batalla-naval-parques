@@ -125,9 +125,9 @@ body[data-map="glaciares"] .hero-art {
   flex: none;
   border: 2px solid rgba(255, 255, 255, 0.4);
 }
-.banner.nahuel { background: #123 url("maps/nahuel-mixto-0.jpg") center 42% / cover; }
-.banner.iguazu { background: #123 url("maps/iguazu-mixto-4.jpg") center 28% / cover; }
-.banner.glaciares { background: #123 url("maps/glaciares-mixto-2.jpg") center 30% / cover; }
+.banner.nahuel { background: #123 url("maps/nahuel-mixto-2a.jpg") center 42% / cover; }
+.banner.iguazu { background: #123 url("maps/iguazu-mixto-2a.jpg") center 28% / cover; }
+.banner.glaciares { background: #123 url("maps/glaciares-mixto-2b.jpg") center 30% / cover; }
 .seg, .nation {
   padding: 10px 8px;
   font-size: 0.95rem;
@@ -1052,3 +1052,6 @@ body.rules-clasico #turnbar { display: none !important; }
 #board-geo { pointer-events: auto; margin: 0; padding: 1px 9px; border-radius: 999px; font-size: 0.64rem; align-self: center; color: #bfdbfe; background: rgba(8, 14, 28, 0.5); text-shadow: 0 1px 2px rgba(0,0,0,.8); }
 body.in-battle:not(.hud-open) #board-geo, body.placing #board-geo { display: none; }
 @media (min-width: 900px) and (min-height: 560px) { #board-geo { align-self: flex-start; } }
+
+.map-credit { margin: 2px 0 0; font-size: 10px; line-height: 1.3; opacity: .55; }
+.map-credit a { color: inherit; }
