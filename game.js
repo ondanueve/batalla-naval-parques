@@ -345,6 +345,8 @@
   }
 
   function showMenu() {
+    // al volver del desafío del día, el menú recupera lo que estaba elegido (y lo que se toque ahora manda)
+    if (preDaily) { Object.assign(opts, preDaily); preDaily = null; opts.daily = null; applyRules(); }
     stopClock();
     destroyNet();
     match = null;
@@ -654,7 +656,7 @@
         if (tuto && tuto.step === 0 && !placeNote) sub = "Tutorial: " + sub;
       } else {
         main = "Flota lista.";
-        sub = placeNote || (secs + " · tocá una unidad para moverla, o Estoy listo");
+        sub = placeNote || (secs + " · tocá una unidad para ajustarla, o Estoy listo");
       }
     } else if (waitingReady) {
       main = "Flota cerrada.";
@@ -889,99 +891,303 @@
     if (ship.horizontal) return { x: -1, y: 0 };
     return { x: 0, y: -1 };
   }
-
-  function drawShipHull(g, ship, color) {
+  /* ---------- Tropas: siluetas vistas desde arriba (canvas propio, sin assets externos) ----------
+     Material realista (verde oliva para blindados, gris naval para barcos) y el color de cada unidad
+     como franja de identificación, para que se distingan en el móvil. Con color forzado (fantasma
+     verde/rojo o restos) toda la unidad toma ese tono. */
+  function hexRgb(h) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(h || "");
+    if (!m) return [128, 128, 128];
+    const n = parseInt(m[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function shade(h, k) {
+    // k > 0 aclara hacia blanco, k < 0 oscurece hacia negro
+    const c = hexRgb(h).map((v) => Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k)));
+    return "rgb(" + c[0] + "," + c[1] + "," + c[2] + ")";
+  }
+  function rr(x, y, w, h, r) { roundRect(x, y, w, h, r); }
+  function unitFrame(g, ship) {
     const dir = unitDir(ship);
-    const bow = cellPx(g, ship.x, ship.y);
-    const sternI = ship.size - 1;
-    const stern = cellPx(
-      g,
-      ship.horizontal ? ship.x + sternI : ship.x,
-      ship.horizontal ? ship.y : ship.y + sternI
-    );
-    const bcx = bow.x + g.cellW * 0.5;
-    const bcy = bow.y + g.cellH * 0.5;
-    const scx = stern.x + g.cellW * 0.5;
-    const scy = stern.y + g.cellH * 0.5;
-    const dx = dir.x;
-    const dy = dir.y;
-    const px = -dy;
-    const py = dx;
-    const beam = Math.min(g.cellW, g.cellH) * 0.36;
-    const tipX = bcx + dx * g.cellW * 0.46;
-    const tipY = bcy + dy * g.cellH * 0.46;
-    const shX = bcx - dx * g.cellW * 0.02;
-    const shY = bcy - dy * g.cellH * 0.02;
-    const back = Math.min(g.cellW, g.cellH) * 0.36;
-    const bkX = scx - dx * back;
-    const bkY = scy - dy * back;
-    ctx.beginPath();
-    ctx.moveTo(tipX, tipY);
-    ctx.lineTo(shX + px * beam, shY + py * beam);
-    ctx.lineTo(bkX + px * beam * 0.86, bkY + py * beam * 0.86);
-    ctx.lineTo(bkX - px * beam * 0.86, bkY - py * beam * 0.86);
-    ctx.lineTo(shX - px * beam, shY - py * beam);
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0,0,0,.55)";
-    ctx.lineWidth = Math.max(1.5, g.dpr);
-    ctx.stroke();
-    const cabX = bcx * 0.35 + scx * 0.65;
-    const cabY = bcy * 0.35 + scy * 0.65;
-    ctx.fillStyle = "rgba(15,23,42,.55)";
-    ctx.beginPath();
-    ctx.ellipse(cabX, cabY, beam * 0.42, beam * 0.62, Math.atan2(dy, dx), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,.95)";
-    ctx.beginPath();
-    ctx.arc(bcx + dx * g.cellW * 0.08, bcy + dy * g.cellH * 0.08, Math.min(g.cellW, g.cellH) * 0.09, 0, Math.PI * 2);
-    ctx.fill();
+    const along = ship.horizontal ? g.cellW : g.cellH;
+    const across = ship.horizontal ? g.cellH : g.cellW;
+    const p0 = cellPx(g, ship.x, ship.y);
+    const len = ship.size * along;
+    const cx = p0.x + (ship.horizontal ? len / 2 : g.cellW / 2);
+    const cy = p0.y + (ship.horizontal ? g.cellH / 2 : len / 2);
+    return { cx, cy, ang: Math.atan2(dir.y, dir.x), along, across, len };
   }
 
-  function drawTankCell(g, x, y, dir, color) {
+  function drawTankCell(g, x, y, dir, base, accent, name, lead) {
     const p = cellPx(g, x, y);
-    const cx = p.x + g.cellW * 0.5;
-    const cy = p.y + g.cellH * 0.5;
+    const bw = Math.min(g.cellW, g.cellH);
+    const cx = p.x + g.cellW * 0.5, cy = p.y + g.cellH * 0.5;
+    const apc = /blindado/i.test(name || "");
+    const heavy = /pesado/i.test(name || "");
+    const light = /ligero/i.test(name || "");
     ctx.save();
+    // sombra proyectada (siempre hacia abajo a la derecha de la pantalla)
+    ctx.save();
+    ctx.translate(cx + bw * 0.05, cy + bw * 0.07);
+    ctx.rotate(Math.atan2(dir.y, dir.x));
+    ctx.fillStyle = "rgba(0,0,0,.32)";
+    rr(-bw * 0.44, -bw * 0.4, bw * 0.88, bw * 0.8, bw * 0.12);
+    ctx.fill();
+    ctx.restore();
     ctx.translate(cx, cy);
     ctx.rotate(Math.atan2(dir.y, dir.x));
-    const bw = Math.min(g.cellW, g.cellH);
-    ctx.fillStyle = "rgba(15,23,42,.8)";
-    ctx.fillRect(-bw * 0.16, -bw * 0.34, bw * 0.62, bw * 0.16);
-    ctx.fillRect(-bw * 0.16, bw * 0.18, bw * 0.62, bw * 0.16);
-    ctx.fillStyle = color;
-    roundRect(-bw * 0.22, -bw * 0.2, bw * 0.62, bw * 0.4, bw * 0.08);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0,0,0,.45)";
-    ctx.lineWidth = Math.max(1, g.dpr * 0.8);
-    ctx.stroke();
-    ctx.fillStyle = "rgba(15,23,42,.72)";
+    const lw = Math.max(1, g.dpr * 0.7);
+    if (apc) {
+      // ruedas (8x8)
+      ctx.fillStyle = "#1b1f24";
+      for (let i = 0; i < 4; i++) {
+        const wx = -bw * 0.33 + i * bw * 0.21;
+        rr(wx, -bw * 0.4, bw * 0.13, bw * 0.1, bw * 0.03); ctx.fill();
+        rr(wx, bw * 0.3, bw * 0.13, bw * 0.1, bw * 0.03); ctx.fill();
+      }
+    } else {
+      // orugas con eslabones
+      [-1, 1].forEach((s) => {
+        const ty = s < 0 ? -bw * 0.41 : bw * 0.24;
+        ctx.fillStyle = "#1d2126";
+        rr(-bw * 0.43, ty, bw * 0.86, bw * 0.17, bw * 0.06); ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,.14)";
+        ctx.lineWidth = lw;
+        ctx.beginPath();
+        for (let k = -0.38; k <= 0.39; k += 0.085) { ctx.moveTo(bw * k, ty + bw * 0.02); ctx.lineTo(bw * k, ty + bw * 0.15); }
+        ctx.stroke();
+      });
+    }
+    // casco con bisel (luz de arriba a la izquierda)
+    const hullG = ctx.createLinearGradient(0, -bw * 0.26, 0, bw * 0.26);
+    hullG.addColorStop(0, shade(base, 0.28));
+    hullG.addColorStop(0.5, base);
+    hullG.addColorStop(1, shade(base, -0.35));
+    ctx.fillStyle = hullG;
     ctx.beginPath();
-    ctx.arc(bw * 0.02, 0, bw * 0.13, 0, Math.PI * 2);
+    ctx.moveTo(-bw * 0.4, -bw * 0.26);
+    ctx.lineTo(bw * 0.3, -bw * 0.26);
+    ctx.lineTo(bw * 0.42, -bw * 0.16);
+    ctx.lineTo(bw * 0.42, bw * 0.16);
+    ctx.lineTo(bw * 0.3, bw * 0.26);
+    ctx.lineTo(-bw * 0.4, bw * 0.26);
+    ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = "rgba(248,250,252,.9)";
-    ctx.lineWidth = Math.max(2, bw * 0.07);
-    ctx.beginPath();
-    ctx.moveTo(bw * 0.08, 0);
-    ctx.lineTo(bw * 0.4, 0);
+    ctx.strokeStyle = "rgba(0,0,0,.55)";
+    ctx.lineWidth = lw;
     ctx.stroke();
+    // placa frontal inclinada
+    ctx.fillStyle = "rgba(255,255,255,.16)";
+    ctx.beginPath();
+    ctx.moveTo(bw * 0.3, -bw * 0.26); ctx.lineTo(bw * 0.42, -bw * 0.16); ctx.lineTo(bw * 0.42, bw * 0.16); ctx.lineTo(bw * 0.3, bw * 0.26);
+    ctx.closePath(); ctx.fill();
+    // rejilla del motor (atrás)
+    ctx.strokeStyle = "rgba(0,0,0,.35)";
+    ctx.beginPath();
+    for (let k = 0; k < 4; k++) { const gx = -bw * (0.36 - k * 0.045); ctx.moveTo(gx, -bw * 0.15); ctx.lineTo(gx, bw * 0.15); }
+    ctx.stroke();
+    // franja de identificación (color de la unidad)
+    ctx.fillStyle = accent;
+    ctx.fillRect(-bw * 0.21, -bw * 0.26, bw * 0.07, bw * 0.52);
+    if (apc) {
+      ctx.fillStyle = shade(base, -0.25);
+      rr(-bw * 0.06, -bw * 0.1, bw * 0.2, bw * 0.2, bw * 0.04); ctx.fill();
+      ctx.strokeStyle = "#11151a"; ctx.lineWidth = Math.max(1.5, bw * 0.05);
+      ctx.beginPath(); ctx.moveTo(bw * 0.12, 0); ctx.lineTo(bw * 0.36, 0); ctx.stroke();
+      ctx.restore();
+      return;
+    }
+    // cañón (sobresale apenas hacia adelante)
+    const tr = bw * (heavy ? 0.2 : light ? 0.145 : 0.17);
+    const tx = -bw * 0.02;
+    ctx.fillStyle = "#15191d";
+    const bl = bw * (heavy ? 0.62 : light ? 0.5 : 0.56);
+    const bt = Math.max(1.6, bw * (heavy ? 0.075 : 0.06));
+    ctx.fillRect(tx, -bt / 2, bl, bt);
+    ctx.fillRect(tx + bl - bw * 0.07, -bt * 0.85, bw * 0.07, bt * 1.7); // freno de boca
+    // torreta
+    const tg = ctx.createRadialGradient(tx - tr * 0.35, -tr * 0.35, tr * 0.1, tx, 0, tr * 1.1);
+    tg.addColorStop(0, shade(base, 0.38));
+    tg.addColorStop(1, shade(base, -0.3));
+    ctx.fillStyle = tg;
+    ctx.beginPath();
+    ctx.moveTo(tx + tr * 1.05, -tr * 0.55);
+    ctx.lineTo(tx + tr * 1.05, tr * 0.55);
+    ctx.lineTo(tx + tr * 0.3, tr);
+    ctx.lineTo(tx - tr * 0.95, tr * 0.8);
+    ctx.lineTo(tx - tr * 1.15, 0);
+    ctx.lineTo(tx - tr * 0.95, -tr * 0.8);
+    ctx.lineTo(tx + tr * 0.3, -tr);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.6)";
+    ctx.lineWidth = lw;
+    ctx.stroke();
+    // escotilla
+    ctx.fillStyle = shade(base, -0.45);
+    ctx.beginPath(); ctx.arc(tx - tr * 0.35, -tr * 0.3, tr * 0.28, 0, Math.PI * 2); ctx.fill();
+    if (lead) {
+      // la punta de la columna lleva un banderín blanco: se lee el sentido de un vistazo
+      ctx.fillStyle = "rgba(255,255,255,.95)";
+      ctx.beginPath(); ctx.arc(tx - tr * 0.35, tr * 0.38, Math.max(1.5, tr * 0.2), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawShipHull(g, ship, base, accent) {
+    const f = unitFrame(g, ship);
+    const name = ship.name || "";
+    const sub = /submarino/i.test(name);
+    const carrier = /portaaviones/i.test(name);
+    const boat = /lancha/i.test(name);
+    const half = f.len / 2 - f.along * 0.06;
+    const B = f.across * (sub ? 0.26 : carrier ? 0.4 : boat ? 0.3 : 0.34); // media manga
+    const lw = Math.max(1, g.dpr * 0.8);
+    ctx.save();
+    ctx.translate(f.cx, f.cy);
+    ctx.rotate(f.ang);
+    // estela y ola de proa (espuma)
+    {
+      // estela: espuma que se abre y se apaga detrás de la popa (sin salirse de la celda de al lado)
+      const wg = ctx.createLinearGradient(-half, 0, -half - f.along * 0.42, 0);
+      wg.addColorStop(0, "rgba(255,255,255,.4)");
+      wg.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = wg;
+      ctx.beginPath();
+      ctx.moveTo(-half + f.along * 0.05, -B * 0.55);
+      ctx.quadraticCurveTo(-half - f.along * 0.2, -B * 0.7, -half - f.along * 0.42, -B * 1.05);
+      ctx.lineTo(-half - f.along * 0.42, B * 1.05);
+      ctx.quadraticCurveTo(-half - f.along * 0.2, B * 0.7, -half + f.along * 0.05, B * 0.55);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.35)";
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.moveTo(half + f.along * 0.04, 0); ctx.quadraticCurveTo(half - f.along * 0.2, -B * 1.25, half - f.along * 0.55, -B * 1.3);
+      ctx.moveTo(half + f.along * 0.04, 0); ctx.quadraticCurveTo(half - f.along * 0.2, B * 1.25, half - f.along * 0.55, B * 1.3);
+      ctx.stroke();
+    }
+    // casco
+    const hull = () => {
+      ctx.beginPath();
+      if (sub) {
+        ctx.ellipse(0, 0, half, B, 0, 0, Math.PI * 2);
+        return;
+      }
+      ctx.moveTo(half + f.along * 0.04, 0);
+      ctx.bezierCurveTo(half - f.along * 0.25, -B * 0.95, half - f.along * 0.6, -B, half - f.along * 0.9, -B);
+      ctx.lineTo(-half + f.along * 0.18, -B);
+      ctx.quadraticCurveTo(-half, -B, -half, -B * 0.6);
+      ctx.lineTo(-half, B * 0.6);
+      ctx.quadraticCurveTo(-half, B, -half + f.along * 0.18, B);
+      ctx.lineTo(half - f.along * 0.9, B);
+      ctx.bezierCurveTo(half - f.along * 0.6, B, half - f.along * 0.25, B * 0.95, half + f.along * 0.04, 0);
+      ctx.closePath();
+    };
+    ctx.save();
+    ctx.translate(f.along * 0.05, f.across * 0.08);
+    ctx.fillStyle = "rgba(0,0,0,.3)";
+    hull(); ctx.fill();
+    ctx.restore();
+    const hg = ctx.createLinearGradient(0, -B, 0, B);
+    hg.addColorStop(0, shade(base, 0.3));
+    hg.addColorStop(0.45, base);
+    hg.addColorStop(1, shade(base, -0.4));
+    ctx.fillStyle = hg;
+    hull(); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.6)";
+    ctx.lineWidth = lw;
+    ctx.stroke();
+    // borde de color: identifica la unidad sin perder el material
+    ctx.save();
+    hull(); ctx.clip();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = Math.max(2, B * 0.32);
+    hull(); ctx.stroke();
+    ctx.restore();
+    const deck = shade(base, carrier ? -0.35 : 0.18);
+    if (sub) {
+      // vela (torreta) y timones
+      ctx.fillStyle = shade(base, -0.45);
+      rr(half * 0.15, -B * 0.32, f.along * 0.5, B * 0.64, B * 0.3); ctx.fill();
+      ctx.fillRect(-half * 0.92, -B * 1.05, f.along * 0.12, B * 2.1);
+      ctx.strokeStyle = "rgba(255,255,255,.25)";
+      ctx.beginPath(); ctx.moveTo(-half * 0.7, 0); ctx.lineTo(half * 0.8, 0); ctx.stroke();
+    } else if (carrier) {
+      // cubierta de vuelo: pista, marcas y la isla a estribor
+      ctx.fillStyle = deck;
+      rr(-half + f.along * 0.1, -B * 0.82, f.len - f.along * 0.55, B * 1.64, B * 0.2); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.75)";
+      ctx.lineWidth = lw;
+      ctx.setLineDash([f.along * 0.18, f.along * 0.12]);
+      ctx.beginPath(); ctx.moveTo(-half + f.along * 0.25, 0); ctx.lineTo(half - f.along * 0.5, 0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-half + f.along * 0.3, B * 0.45); ctx.lineTo(half * 0.35, -B * 0.55); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = shade(base, 0.25);
+      rr(-f.along * 0.3, B * 0.42, f.along * 0.9, B * 0.42, B * 0.08); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,.45)";
+      ctx.fillRect(f.along * 0.05, B * 0.5, f.along * 0.18, B * 0.26);
+      // elevadores de aviones (dos placas laterales)
+      ctx.fillStyle = "rgba(255,255,255,.12)";
+      ctx.fillRect(-half + f.along * 0.6, -B * 0.8, f.along * 0.35, B * 0.3);
+      ctx.fillRect(f.along * 0.2, -B * 0.8, f.along * 0.35, B * 0.3);
+    } else {
+      // cubierta, superestructura con puente, chimenea y torretas
+      ctx.fillStyle = deck;
+      ctx.beginPath(); ctx.ellipse(0, 0, half * 0.82, B * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+      const bridgeX = boat ? -f.along * 0.1 : f.len * 0.08;
+      const bw2 = boat ? f.along * 0.5 : f.along * Math.min(1.1, 0.35 * ship.size);
+      const sg = ctx.createLinearGradient(0, -B * 0.5, 0, B * 0.5);
+      sg.addColorStop(0, shade(base, boat ? 0.65 : 0.45));
+      sg.addColorStop(1, shade(base, boat ? 0.1 : -0.15));
+      ctx.fillStyle = sg;
+      rr(bridgeX - bw2 / 2, -B * 0.46, bw2, B * 0.92, B * 0.18); ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,.5)"; ctx.lineWidth = lw; ctx.stroke();
+      // ventanas del puente
+      ctx.fillStyle = "rgba(15,23,42,.85)";
+      ctx.fillRect(bridgeX + bw2 / 2 - f.along * 0.1, -B * 0.36, f.along * 0.06, B * 0.72);
+      if (!boat) {
+        ctx.fillStyle = "#2a2f36";
+        ctx.beginPath(); ctx.ellipse(bridgeX - bw2 / 2 - f.along * 0.16, 0, f.along * 0.13, B * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "rgba(0,0,0,.6)";
+        ctx.beginPath(); ctx.ellipse(bridgeX - bw2 / 2 - f.along * 0.16, 0, f.along * 0.07, B * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+        const turret = (tx, facing) => {
+          const r = Math.min(B * 0.42, f.along * 0.22);
+          ctx.fillStyle = "#1c2026";
+          const bl = r * 2.1;
+          ctx.fillRect(tx, -r * 0.32, facing * bl, r * 0.22);
+          ctx.fillRect(tx, r * 0.1, facing * bl, r * 0.22);
+          const tg = ctx.createRadialGradient(tx - r * 0.3, -r * 0.3, r * 0.1, tx, 0, r);
+          tg.addColorStop(0, shade(base, 0.45)); tg.addColorStop(1, shade(base, -0.3));
+          ctx.fillStyle = tg;
+          ctx.beginPath(); ctx.arc(tx, 0, r, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.lineWidth = lw; ctx.stroke();
+        };
+        turret(half - f.along * 0.75, 1);
+        if (ship.size >= 4) turret(half - f.along * 1.35, 1);
+        if (ship.size >= 3) turret(-half + f.along * 0.45, -1);
+      }
+    }
+    // proa: punto blanco (orientación de un vistazo)
+    ctx.fillStyle = "rgba(255,255,255,.95)";
+    ctx.beginPath(); ctx.arc(half - f.along * (sub ? 0.25 : 0.32), 0, Math.max(1.5, Math.min(f.along, f.across) * 0.07), 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
   function drawHull(g, ship, alpha, color) {
     ctx.save();
     ctx.globalAlpha = alpha;
-    const fill = color || ship.color;
     const kind = ship.kind || (opts.terrain === "tierra" ? "tanque" : "barco");
+    // material realista; el color propio de la unidad queda como franja de identificación
+    const base = color || (kind === "tanque" ? "#5f6b3a" : "#7b8794");
+    const accent = color ? shade(color, 0.25) : (ship.color || "#e5e7eb");
     if (kind === "tanque") {
       const dir = unitDir(ship);
       for (let i = 0; i < ship.size; i++) {
         const c = ship.horizontal ? { x: ship.x + i, y: ship.y } : { x: ship.x, y: ship.y + i };
-        drawTankCell(g, c.x, c.y, dir, fill);
+        drawTankCell(g, c.x, c.y, dir, base, accent, ship.name, i === 0);
       }
     } else {
-      drawShipHull(g, ship, fill);
+      drawShipHull(g, ship, base, accent);
     }
     ctx.restore();
   }
@@ -1403,7 +1609,7 @@
             const hs = moveHandles();
             hs.forEach((o) => {
               const chosen = sel.dest && sel.dest.dx === o.dx && sel.dest.dy === o.dy;
-              if (chosen) drawHull(g, { x: o.x, y: o.y, size: u.size, horizontal: u.horizontal, kind: u.kind, color: u.color }, 0.88, "#4ade80");
+              if (chosen) drawHull(g, { x: o.x, y: o.y, size: u.size, horizontal: u.horizontal, kind: u.kind, color: u.color, name: u.name }, 0.88, "#4ade80");
             });
             hs.forEach((o) => {
               const chosen = sel.dest && sel.dest.dx === o.dx && sel.dest.dy === o.dy;
@@ -1419,6 +1625,7 @@
           size: hand.ship.size,
           horizontal: hand.horizontal,
           kind: hand.ship.kind,
+          name: hand.ship.name,
           color: hand.ship.color
         };
         const issue = C.placeIssue(
@@ -1441,6 +1648,7 @@
           size: w.cells.length,
           horizontal,
           kind: spec ? spec.kind : "barco",
+          name: w.name,
           color: "#64748b"
         };
         const age = w.t0 ? (performance.now() - w.t0) / 1000 : 9;
@@ -3277,7 +3485,7 @@
   }
 
   /* ---------- Desafío del día: misma semilla para todos (fecha de Argentina), récord local ---------- */
-  let preDaily = null;
+  var preDaily = null; // var: showMenu lo lee
   function dailyKey() {
     try { return new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }); }
     catch (e) { return new Date().toISOString().slice(0, 10); }
