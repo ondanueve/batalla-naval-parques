@@ -1045,3 +1045,10 @@ body.in-battle:not(.hud-open) #turnbar .act.shoot.boost small { display: block; 
 .steps li.hidden { display: none; }
 body.rules-clasico #turnbar { display: none !important; }
 #hud-pill.classic em:empty { display: none; }
+
+/* link discreto al sector real en Google Maps */
+.geo-link { display: inline-block; margin-top: 6px; font-size: 0.72rem; font-weight: 700; color: #93c5fd; opacity: 0.8; text-decoration: none; }
+.geo-link:hover, .geo-link:focus-visible { opacity: 1; text-decoration: underline; }
+#board-geo { pointer-events: auto; margin: 0; padding: 1px 9px; border-radius: 999px; font-size: 0.64rem; align-self: center; color: #bfdbfe; background: rgba(8, 14, 28, 0.5); text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+body.in-battle:not(.hud-open) #board-geo, body.placing #board-geo { display: none; }
+@media (min-width: 900px) and (min-height: 560px) { #board-geo { align-self: flex-start; } }

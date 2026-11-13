@@ -33,7 +33,7 @@ async function suitePlace() {
     const { page: p, log } = g;
     await p.goto(BASE); await p.waitForSelector('#start');
     await setup(p, { map: 'iguazu', terrain: 'mixto' }); await p.click('#start');
-    await p.waitForFunction(() => window.__parquesState().phase === 'place', null, { timeout: 20000 });
+    await p.waitForFunction(() => window.__parquesState().phase === 'place' && document.body.classList.contains('placing'), null, { timeout: 20000 }); await wait(200);
     const tap = async (x, y) => { const c = await cellXY(p, x, y); if (touch) await p.touchscreen.tap(c.x, c.y); else await p.mouse.click(c.x, c.y); await wait(120); };
     const drag = async (x0, y0, x1, y1) => {
       const a = await cellXY(p, x0, y0), z = await cellXY(p, x1, y1);
@@ -307,7 +307,39 @@ async function pvpOnce(rules) {
   await H.ctx.close(); await J.ctx.close();
 }
 
-const suites = { modes: suiteModes, place: suitePlace, hud: suiteHud, touch: suiteTouch, daily: suiteDaily, tuto: suiteTuto, pvc: suitePvc, pvp: suitePvp };
+async function suiteGeo() {
+  console.log('LINK A GOOGLE MAPS');
+  const want = { nahuel: '-40.9531,-71.5381', iguazu: '-25.693,-54.44', glaciares: '-50.4714,-73.0465' };
+  for (const tag of ['mobile', 'desktop']) {
+    const g = await mk(b, { viewport: VPS[tag] }); const p = g.page;
+    await p.goto(BASE); await p.waitForSelector('#start');
+    for (const m of Object.keys(want)) {
+      await p.click(`#maps [data-map=${m}]`);
+      const a = await p.evaluate(() => { const e = document.getElementById('map-geo'); return { href: e.href, target: e.target, rel: e.rel, text: e.textContent, vis: !!e.offsetParent }; });
+      ok(a.vis && a.href.startsWith('https://www.google.com/maps/@' + want[m] + ',') && a.target === '_blank' && /noopener/.test(a.rel), `${tag}: menú ${m} → ${a.href} («${a.text}»)`);
+    }
+    await p.click('#maps [data-map=iguazu]');
+    await p.locator('#map-geo').scrollIntoViewIfNeeded();
+    await shot(p, `geo-menu-${tag}`);
+    // pestaña nueva de verdad (sin cargar Google: se corta la navegación)
+    await g.ctx.route('https://www.google.com/**', (r) => r.fulfill({ status: 200, body: 'ok' }));
+    const [pop] = await Promise.all([g.ctx.waitForEvent('page'), p.click('#map-geo')]);
+    ok(/google\.com\/maps\/@-25\.693,-54\.44,14z/.test(pop.url()), `${tag}: abre pestaña nueva ${pop.url()}`); await pop.close();
+    await setup(p, { map: 'iguazu', terrain: 'mixto', rules: 'clasico' }); await p.click('#start');
+    await p.waitForFunction(() => document.body.classList.contains('placing')); await wait(200);
+    ok(!(await p.isVisible('#board-geo')), `${tag}: en colocación el link no aparece`);
+    await placeAll(p); await p.click('#ready'); await waitAttack(p); await wait(500);
+    ok(!(await p.isVisible('#board-geo')), `${tag}: en batalla plegada no aparece (no tapa celdas)`);
+    await p.click('#hud-pill'); await wait(400);
+    ok(await p.isVisible('#board-geo') && /-25\.693,-54\.44/.test(await p.getAttribute('#board-geo', 'href')), `${tag}: con el panel abierto, link discreto junto al nombre del parque`);
+    await shot(p, `geo-battle-${tag}`);
+    await p.click('#hud-pill'); await wait(300);
+    ok(clean(g.log).length === 0, `${tag}: consola limpia ${clean(g.log)}`);
+    await g.ctx.close();
+  }
+}
+
+const suites = { geo: suiteGeo, modes: suiteModes, place: suitePlace, hud: suiteHud, touch: suiteTouch, daily: suiteDaily, tuto: suiteTuto, pvc: suitePvc, pvp: suitePvp };
 for (const k of which === 'all' ? Object.keys(suites) : which.split(',')) await suites[k]();
 await b.close();
 console.log(fails.length ? `\n${fails.length} FALLAS` : '\nTODO OK', '· capturas en', OUT);

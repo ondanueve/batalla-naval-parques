@@ -80,6 +80,23 @@
   try { opts.rules = C.normMode(sessionStorage.getItem(KEY_RULES)); } catch (e) { opts.rules = "clasico"; }
   const classic = () => opts.rules === "clasico";
   const RULES_NAME = { clasico: "Clásico", reloaded: "Reloaded" };
+  // link discreto al sector real del mapa (Google Maps, vista satelital, pestaña nueva)
+  function geoUrl(id) {
+    const g = C.MAPS[id] && C.MAPS[id].geo;
+    if (!g) return "https://www.google.com/maps";
+    return "https://www.google.com/maps/@" + g.lat + "," + g.lng + "," + g.z + "z/data=!3m1!1e3";
+  }
+  function paintGeo() {
+    const g = C.MAPS[opts.map] && C.MAPS[opts.map].geo;
+    ["map-geo", "board-geo"].forEach((id) => {
+      const a = document.getElementById(id);
+      if (!a) return;
+      a.href = geoUrl(opts.map);
+      if (g) a.title = g.sector + " · " + g.lat + ", " + g.lng + " (Google Maps, pestaña nueva)";
+    });
+    const m = document.getElementById("map-geo");
+    if (m && g) m.textContent = "Ver " + g.sector + " en Google Maps ↗";
+  }
   function applyRules() {
     document.body.classList.toggle("rules-clasico", classic());
     document.body.classList.toggle("rules-reloaded", !classic());
@@ -286,9 +303,11 @@
         root.querySelectorAll("button").forEach((el) => el.classList.toggle("selected", el === b));
         if (key === "terrain") document.getElementById("terrain-hint").textContent = HINTS[opts.terrain];
         if (key === "map" || key === "terrain") applyTheme();
+        if (key === "map") paintGeo();
         if (key === "rules") {
           try { sessionStorage.setItem(KEY_RULES, opts.rules); } catch (e) { /* sin sesión */ }
           paintRulesMenu();
+  paintGeo();
         }
         if (key === "mode") {
           document.getElementById("ai-block").classList.toggle("hidden", opts.mode === "pvp");
@@ -3052,6 +3071,7 @@
       if (!C.MODES.includes(msg.rules)) { rulesClash("La sala viene de otra versión del juego. Pedile al rival que recargue la página."); return; }
       opts.rules = msg.rules;
       applyRules();
+      paintGeo();
       applyTheme();
       freshMatch("inv");
       showBattle();
@@ -3324,6 +3344,7 @@
     opts.seed = daily ? opts.daily.seed : Math.floor(Math.random() * 4294967296);
     applyRules();
     applyTheme();
+    paintGeo();
     if (opts.mode === "pvp") {
       if (!window.Peer) {
         say("Falta la conexión en línea. Recargá e intentá de nuevo.");

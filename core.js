@@ -19,16 +19,22 @@
   const MAPS = {
     nahuel: {
       id: "nahuel",
+      // sector real que muestra la imagen satelital (para el link a Google Maps)
+      geo: { lat: -40.9531, lng: -71.5381, z: 11, sector: "Isla Victoria, lago Nahuel Huapi" },
       name: "Nahuel Huapi",
       blurb: "Lagos y viento andino"
     },
     iguazu: {
       id: "iguazu",
+      // sector real que muestra la imagen satelital (para el link a Google Maps)
+      geo: { lat: -25.6930, lng: -54.4400, z: 14, sector: "Garganta del Diablo, cataratas del Iguazú" },
       name: "Iguazú",
       blurb: "Selva y cataratas"
     },
     glaciares: {
       id: "glaciares",
+      // sector real que muestra la imagen satelital (para el link a Google Maps)
+      geo: { lat: -50.4714, lng: -73.0465, z: 12, sector: "Frente del glaciar Perito Moreno" },
       name: "Los Glaciares",
       blurb: "Hielo y silencio"
     }
