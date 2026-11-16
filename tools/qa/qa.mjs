@@ -29,6 +29,7 @@ async function suitePlace() {
   console.log('PLACE');
   for (const [tag, vp] of Object.entries(VPS)) {
     const { page: p, log } = await newGame(vp);
+    await p.waitForFunction(() => /Posicioná/.test(window.__parquesState().place.msg), null, { timeout: 3000 }).catch(() => {}); // se pinta en el próximo cuadro
     let s = await st(p);
     ok(s.place.unplaced === 5 && s.units.every((u) => u.lifted), `${tag}: arranca sin unidades colocadas`);
     ok((await hudVisible(p)).length === 0, `${tag}: sin HUD en colocación (${await hudVisible(p)})`);
@@ -186,6 +187,11 @@ async function suitePvp() {
     await b.close(); process.exit(1);
   }
   ok(JSON.stringify(a.pickups) === JSON.stringify(c.pickups), 'tesoros iguales en ambos');
+  await wait(900);
+  const rc = (pg) => pg.evaluate(() => ({ vis: !!document.getElementById('recap').offsetParent, cols: document.querySelectorAll('#recap-chart .col').length, bars: document.querySelectorAll('#recap-chart .b').length, cap: document.getElementById('recap-cap').textContent }));
+  const [ra, rb] = [await rc(H.page), await rc(J.page)];
+  ok(ra.vis && rb.vis && ra.bars === a.turnNo && rb.bars === c.turnNo && ra.cols === rb.cols, `resumen en ambos: ${ra.cols}/${rb.cols} rondas, ${ra.bars}/${rb.bars} jugadas · «${ra.cap}» / «${rb.cap}»`);
+  await shot(H.page, 'pvp-host-end'); await shot(J.page, 'pvp-join-end');
   const rem = (pg) => pg.evaluate(() => { document.getElementById('juke-panel')?.classList.add('hidden'); document.getElementById('rematch').click(); });
   await rem(H.page); await wait(600); await rem(J.page); await wait(2500);
   ok((await st(H.page)).phase === 'place' && (await st(J.page)).place.unplaced === 5, 'revancha: se vuelve a colocar');
@@ -195,7 +201,54 @@ async function suitePvp() {
   ok(!clean(H.log).length && !clean(J.log).length, `consolas limpias ${clean(H.log)} ${clean(J.log)}`);
 }
 
-const suites = { place: suitePlace, hud: suiteHud, touch: suiteTouch, daily: suiteDaily, tuto: suiteTuto, pvc: suitePvc, pvp: suitePvp };
+async function suiteRecap() {
+  console.log('RESUMEN FINAL (jugada a jugada)');
+  const cfgs = [['mobile', 'nahuel', 'agua', 'normal'], ['desktop', 'iguazu', 'mixto', 'dificil'], ['landscape', 'glaciares', 'tierra', 'normal']];
+  await Promise.all(cfgs.map(async ([vp, map, terrain, ai]) => {
+    const g = await mk(b, { viewport: VPS[vp] });
+    const p = g.page;
+    await p.goto(BASE); await p.waitForSelector('#start');
+    await p.click(`#ailevel [data-ai=${ai}]`);
+    await setup(p, { map, terrain }); await p.click('#start');
+    await p.waitForFunction(() => window.__parquesState().phase === 'place', null, { timeout: 20000 });
+    await placeAll(p); await p.click('#ready');
+    const r = await playGame(p, `recap-${vp}`, { maxMs: 480000, pMan: 0.35 });
+    if (!r.ended) { ok(false, `${vp}/${ai}: la partida no terminó a tiempo (${r.turnNo} turnos) ${r.notes.join(',')}`); await shot(p, `recap-${vp}-sin-final`); await p.context().close(); return; }
+    await wait(900);
+    const info = await p.evaluate(() => {
+      const box = document.getElementById('recap'), vh = innerHeight;
+      const cols = document.querySelectorAll('#recap-chart .col').length;
+      const btns = ['rematch', 'share', 'again'].map((id) => { const q = document.getElementById(id).getBoundingClientRect(); return q.top >= 0 && q.bottom <= vh + 1; });
+      const top = document.getElementById('end-kicker').getBoundingClientRect().top;
+      return { vis: !box.classList.contains('hidden') && !!box.offsetParent, cols, cap: document.getElementById('recap-cap').textContent, tip: document.getElementById('recap-tip').textContent, btns, top, rounds: Math.floor((window.__parquesState().turnNo - 1) / 2) + 1, bars: document.querySelectorAll('#recap-chart .b').length, chron: window.__parquesState().chron };
+    });
+    ok(r.ended && !r.notes.length, `${vp}/${ai}: partida terminada (${r.turnNo} turnos, ${r.title}) ${r.notes.join(',')}`);
+    ok(info.vis && info.cols === info.rounds && info.bars === info.chron && info.bars >= r.turnNo, `${vp}: resumen con ${info.cols} rondas y ${info.bars} jugadas (crónica ${info.chron}, turnos ${r.turnNo})`);
+    ok(info.cap.length > 10, `${vp}: momento clave «${info.cap}»`);
+    ok(info.btns.every(Boolean), `${vp}: botones a la vista ${info.btns}`);
+    ok(info.top >= 0, `${vp}: arriba no se corta (kicker en ${Math.round(info.top)})`);
+    await shot(p, `recap-${vp}`);
+    const col = p.locator('#recap-chart .col').nth(Math.floor(info.cols / 2));
+    await col.click(); await wait(200);
+    const cap2 = await p.textContent('#recap-cap');
+    ok(/^Ronda \d+/.test(cap2) && cap2 !== info.cap, `${vp}: tocar una ronda la explica «${cap2.slice(0, 90)}…»`);
+    await shot(p, `recap-${vp}-tap`);
+    // compartir copia el texto con la tira de jugadas
+    await p.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(BASE).origin });
+    await p.click('#share'); await wait(400);
+    const clip = await p.evaluate(() => navigator.clipboard.readText().catch(() => ''));
+    ok(/[🟥🟦🟨🟩⬛💥]/u.test(clip) && /\?parque=/.test(clip), `${vp}: compartir lleva la tira «${clip.split('\n').slice(1, 2).join('')}»`);
+    // la revancha limpia la crónica
+    await p.evaluate(() => { document.getElementById('juke-panel')?.classList.add('hidden'); document.getElementById('rematch').click(); });
+    await p.waitForFunction(() => window.__parquesState().phase === 'place', null, { timeout: 20000 });
+    ok((await st(p)).chron === 0, `${vp}: revancha arranca con la crónica vacía`);
+    ok(clean(g.log).length === 0, `${vp}: consola limpia ${JSON.stringify(clean(g.log))}`);
+    console.log('   tip:', info.tip);
+    await p.context().close();
+  }));
+}
+
+const suites = { place: suitePlace, hud: suiteHud, touch: suiteTouch, daily: suiteDaily, tuto: suiteTuto, pvc: suitePvc, recap: suiteRecap, pvp: suitePvp };
 for (const k of which === 'all' ? Object.keys(suites) : which.split(',')) await suites[k]();
 await b.close();
 console.log(fails.length ? `\n${fails.length} FALLAS` : '\nTODO OK', '· capturas en', OUT);

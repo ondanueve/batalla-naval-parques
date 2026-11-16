@@ -19,7 +19,8 @@ Tres mapas: Nahuel Huapi, Iguazú y Los Glaciares. El terreno puede ser agua, ti
 5. **Tesoros en el mapa**, que se cobran moviendo una unidad encima: *Artillería* (disparo en área, vence con el tiempo), *Blindaje* (+2 de armadura a esa unidad), *Iniciativa* (una jugada extra, si la guardás se pierde) y *Torre* (visión en vivo fija de 5×5). Cada tesoro cuesta un turno sin disparar.
 6. **La guerra escala** (Calma tensa, Tensión, Guerra total, Bombardeo): lo posicional se encarece y deja de rendir, así que las partidas no se estancan. En Bombardeo ya no se maniobra.
 7. Contra la máquina, el invasor tiene personalidad: **agresivo**, **cauto** u **oportunista**. Juega con las mismas reglas que vos.
-8. En línea, Argentina crea la sala y comparte el enlace. Quien entra juega como invasor. Argentina dispara primero. Los tesoros salen de una semilla compartida, así que los dos ven los mismos.
+8. Al terminar, **Jugada a jugada** muestra la partida como un duelo de barras por ronda: arriba lo tuyo, abajo lo del rival, sobre las fases de la guerra. Naranja es disparo (más alto, más daño), amarillo disparo cargado (la maniobra que rindió), celeste maniobra, verde tesoro cobrado y blanco hundimiento. Marca el momento clave, cuenta cuánto rindió desarrollarse y, si tocás una ronda, te dice qué hizo cada uno. **Compartir** suma la tira de tus jugadas en emojis.
+9. En línea, Argentina crea la sala y comparte el enlace. Quien entra juega como invasor. Argentina dispara primero. Los tesoros salen de una semilla compartida, así que los dos ven los mismos.
 
 ## Simulación y pruebas
 

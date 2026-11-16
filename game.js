@@ -565,6 +565,8 @@
       }
     }
     document.getElementById("hud-pill").classList.toggle("hidden", !fighting);
+    const endedNow = !!match && match.phase === "end";
+    if (document.body.classList.contains("ended") !== endedNow) document.body.classList.toggle("ended", endedNow);
     const placingNow = !!match && (match.phase === "place" || match.phase === "sealed");
     if (document.body.classList.contains("placing") !== placingNow) document.body.classList.toggle("placing", placingNow);
     if (!hudDirty || !match) return;
@@ -1887,7 +1889,29 @@
   }
 
   // los efectos nunca deben cortar el turno: si algo falla se registra y el juego sigue
+  /* crónica de la partida para el resumen final: cada jugada, quién, qué y cuánto rindió */
+  function chronLvl() {
+    const t = match && match.shared ? Math.max(0, match.shared.turnNo - 1) : 0;
+    return { lvl: C.warLevel({ turnNo: t }), rd: Math.floor(t / 2) + 1 };
+  }
+  function chronShot(results, incoming, pattern) {
+    if (!match || !match.chron || match.phase === "end") return;
+    let dmg = 0;
+    const sunk = [];
+    (results || []).forEach((r) => {
+      if ((r.kind === "hit" && !r.again) || r.kind === "sunk") dmg++;
+      if (r.kind === "sunk" && r.ship) sunk.push((/^Lancha/.test(r.ship) ? "la " : "el ") + r.ship);
+    });
+    const n = pattern && pattern.cells ? pattern.cells.length : (results || []).length;
+    match.chron.push(Object.assign({ me: !incoming, t: "shot", dmg, sunk, n, lv: pattern && typeof pattern.level === "number" ? pattern.level : null, charged: !!(pattern && pattern.charged) }, chronLvl()));
+  }
+  function chronMan(mine, t, pub) {
+    if (!match || !match.chron || match.phase === "end") return;
+    match.chron.push(Object.assign({ me: !!mine, t, pick: (pub || []).map((p) => p.type) }, chronLvl()));
+  }
+
   async function playResults(results, incoming, pattern) {
+    try { chronShot(results, incoming, pattern); } catch (e) { /* la crónica nunca corta el turno */ }
     try {
       // tope de tiempo: si la animación no termina, el turno sigue igual
       let fin = false;
@@ -2013,7 +2037,8 @@
       keepNext: false,
       shotT: 0,
       pattern: null,
-      stats: { shots: 0, hits: 0, misses: 0, sunk: 0, taken: 0, lost: 0, turns: 0, man: 0, picks: 0, t0: 0, t1: 0 }
+      stats: { shots: 0, hits: 0, misses: 0, sunk: 0, taken: 0, lost: 0, turns: 0, man: 0, picks: 0, t0: 0, t1: 0 },
+      chron: []
     };
     // Colocación unidad por unidad: nada arranca puesto (las unidades "levantadas" no cuentan en el tablero).
     local.forEach((u) => { u.unplaced = true; u.lifted = true; u.horizontal = true; });
@@ -2657,6 +2682,7 @@
   }
 
   async function playManeuver(mine, t, pub, act) {
+    try { chronMan(mine, t, pub); } catch (e) { /* idem */ }
     const j = juke();
     const g = gridGeom();
     let text = "";
@@ -2796,7 +2822,146 @@
     rv.disabled = false;
     rv.textContent = "Revancha";
     document.getElementById("end-note").textContent = "";
+    try { renderRecap(win); } catch (e) { console.warn("parques: resumen", e); document.getElementById("recap").classList.add("hidden"); }
     window.__parquesEnd = { win: !!win, stats: Object.assign({}, stt), argentinaHolds: !!argentinaHolds };
+  }
+
+  /* RESUMEN: la partida como un duelo de barras (arriba vos, abajo el rival), por fases de la guerra */
+  const MAN_TXT = { move: "moviste", watch: "vigilaste", repair: "reparaste", aim: "apuntaste" };
+  const MAN_TXT_FOE = { move: "movió", watch: "vigiló", repair: "reparó", aim: "apuntó" };
+  const PHASE_SHORT = ["Calma", "Tensión", "Guerra", "Bombardeo"];
+  function shotName(e) {
+    const lv = e.lv != null ? e.lv : e.n > 5 ? 2 : e.n > 1 ? 1 : 0;
+    return lv >= 2 ? "disparo 3×3" : lv === 1 ? "disparo en cruz" : "disparo";
+  }
+  function chronLine(e, mine) {
+    if (e.t === "shot") {
+      let t = shotName(e) + (e.charged ? " cargado" : "");
+      t += e.dmg ? ": " + e.dmg + " de daño" : ": agua";
+      if (e.sunk.length) t += (mine ? ", hundiste " : ", hundió ") + e.sunk.join(" y ");
+      return t;
+    }
+    let t = (mine ? MAN_TXT : MAN_TXT_FOE)[e.t] || "maniobró";
+    if (e.pick && e.pick.length) t += (mine ? " y cobraste " : " y cobró ") + e.pick.map((k) => (C.PICKUPS[k] || {}).name || k).join(" y ");
+    return t;
+  }
+  function recapData() {
+    const ch = (match && match.chron) || [];
+    const mine = ch.filter((e) => e.me), foe = ch.filter((e) => !e.me);
+    const sum = (l, f) => l.reduce((a, e) => a + f(e), 0);
+    const shots = mine.filter((e) => e.t === "shot");
+    const d = {
+      ch, mine, foe,
+      rounds: ch.reduce((a, e) => Math.max(a, e.rd), 0),
+      shots: shots.length,
+      man: mine.length - shots.length,
+      dmg: sum(shots, (e) => e.dmg),
+      dmgChg: sum(shots, (e) => (e.charged ? e.dmg : 0)),
+      chgShots: shots.filter((e) => e.charged).length,
+      picks: sum(mine, (e) => (e.pick ? e.pick.length : 0)),
+      foeDmgChg: sum(foe, (e) => (e.t === "shot" && e.charged ? e.dmg : 0)),
+      foeMan: foe.filter((e) => e.t !== "shot").length
+    };
+    let key = null;
+    shots.forEach((e) => { const sc = e.dmg * 2 + e.sunk.length * 3; if (sc > 0 && (!key || sc >= key.sc)) key = { e, sc }; });
+    d.key = key && key.e;
+    return d;
+  }
+  function renderRecap(win) {
+    const box = document.getElementById("recap");
+    const d = recapData();
+    if (!d.ch.length) { box.classList.add("hidden"); return; }
+    const chart = document.getElementById("recap-chart");
+    const cap = document.getElementById("recap-cap");
+    const foeName = match.role === "inv" ? "Argentina" : "El invasor";
+    const R = Math.max(1, d.rounds);
+    chart.textContent = "";
+    chart.style.setProperty("--cols", String(R));
+    const byRound = [];
+    for (let r = 1; r <= R; r++) byRound.push({ r, me: [], foe: [], lvl: 0 });
+    d.ch.forEach((e) => { const c = byRound[e.rd - 1]; if (!c) return; (e.me ? c.me : c.foe).push(e); c.lvl = Math.max(c.lvl, e.lvl); });
+    const bar = (e, mine) => {
+      const b = document.createElement("i");
+      if (e.t === "shot") {
+        b.className = "b " + (e.charged ? "chg" : "shot") + (e.dmg ? "" : " miss") + (e.sunk.length ? " sunk" : "");
+        b.style.setProperty("--h", String(Math.min(1, 0.16 + e.dmg * 0.21)));
+      } else {
+        b.className = "b man" + (e.pick && e.pick.length ? " pick" : "");
+        b.style.setProperty("--h", "0.3");
+      }
+      return b;
+    };
+    const lines = (c) => "Ronda " + c.r + " · " + C.WAR_NAMES[c.lvl] + " — Vos: " + (c.me.map((e) => chronLine(e, true)).join(", luego ") || "—") +
+      ". " + foeName + ": " + (c.foe.map((e) => chronLine(e, false)).join(", luego ") || "—") + ".";
+    byRound.forEach((c, i) => {
+      const col = document.createElement("button");
+      col.type = "button";
+      col.className = "col l" + c.lvl + (d.key && c.me.indexOf(d.key) >= 0 ? " key" : "");
+      col.style.animationDelay = Math.min(1.2, i * 0.025) + "s";
+      const up = document.createElement("span"); up.className = "up";
+      const dn = document.createElement("span"); dn.className = "dn";
+      c.me.forEach((e) => up.appendChild(bar(e, true)));
+      c.foe.forEach((e) => dn.appendChild(bar(e, false)));
+      col.appendChild(up); col.appendChild(dn);
+      col.setAttribute("aria-label", lines(c));
+      const show = () => { chart.querySelectorAll(".col.on").forEach((x) => x.classList.remove("on")); col.classList.add("on"); cap.textContent = lines(c); };
+      col.addEventListener("pointerenter", show);
+      col.addEventListener("focus", show);
+      col.addEventListener("click", show);
+      chart.appendChild(col);
+    });
+    // fases: un tramo por fase de la guerra, con su nombre si entra
+    const ph = document.getElementById("recap-phases");
+    ph.textContent = "";
+    const segs = [];
+    byRound.forEach((c) => { const sg = segs[segs.length - 1]; if (sg && sg.lvl === c.lvl) sg.n++; else segs.push({ lvl: c.lvl, n: 1 }); });
+    segs.forEach((sg) => {
+      const s = document.createElement("span");
+      s.className = "ph l" + sg.lvl;
+      s.style.flex = sg.n + " 1 0";
+      // el nombre solo si entra: tramos angostos quedan como franja de color (con título)
+      const wpx = (sg.n / R) * (ph.clientWidth || 320);
+      if (wpx >= PHASE_SHORT[sg.lvl].length * 6 + 6) s.textContent = PHASE_SHORT[sg.lvl];
+      s.title = C.WAR_NAMES[sg.lvl];
+      ph.appendChild(s);
+    });
+    [["tag-me", "vos"], ["tag-foe", match.role === "inv" ? "Argentina" : "invasor"]].forEach(([c, t]) => { const q = document.createElement("span"); q.className = "tag " + c; q.textContent = t; chart.appendChild(q); });
+    chart.setAttribute("aria-label", "Arriba tus jugadas, abajo las de " + foeName.toLowerCase() + ", ronda por ronda.");
+    const k = d.key;
+    const keyTxt = k ? "Momento clave, ronda " + k.rd + ": " + chronLine(k, true) + "." : "Sin impactos esta vez: el rival nunca quedó a tiro.";
+    cap.textContent = keyTxt;
+    chart.onpointerleave = () => { chart.querySelectorAll(".col.on").forEach((x) => x.classList.remove("on")); cap.textContent = keyTxt; };
+    // lectura del dilema: cuánto rindió desarrollarse
+    const turns = d.shots + d.man;
+    const ratio = turns ? d.man / turns : 0;
+    let tip = "Disparaste " + d.shots + " veces (" + d.dmg + " de daño) y maniobraste " + d.man + ".";
+    if (d.chgShots && !d.dmgChg) tip += d.chgShots === 1 ? " Tu disparo cargado no pegó." : " Tus " + d.chgShots + " disparos cargados no pegaron.";
+    else if (d.chgShots) tip += " Tus cargas rindieron " + d.dmgChg + " de daño en " + d.chgShots + (d.chgShots === 1 ? " disparo." : " disparos.");
+    if (d.picks) tip += " Cobraste " + d.picks + (d.picks === 1 ? " tesoro." : " tesoros.");
+    if (!win) {
+      if (ratio < 0.15) tip += " Casi no te desarrollaste: apuntar antes de rematar convierte un tiro en una cruz.";
+      else if (ratio > 0.5) tip += " Mucho desarrollo y poco daño: cobrá lo invertido antes de que escale la guerra.";
+      else if (d.foeDmgChg > d.dmgChg) tip += " " + foeName + " cobró mejor sus cargas (" + d.foeDmgChg + " de daño contra tus " + d.dmgChg + ").";
+      else tip += " Estuvo cerca: probá otro momento para cambiar de maniobrar a disparar.";
+    } else {
+      const hp = hpOf(match.local, match.hitsOnLocal);
+      if (d.dmgChg >= Math.max(3, d.dmg * 0.3)) tip += " El desarrollo pagó: buena parte del daño vino cargado.";
+      else if (ratio < 0.15) tip += " Ganaste a puro disparo; con una carga a tiempo, en menos turnos.";
+      else tip += " Buen equilibrio entre disparar y desarrollarte.";
+      tip += " Te quedaron " + hp.left + " de " + hp.total + " de casco.";
+    }
+    document.getElementById("recap-tip").textContent = tip;
+    box.classList.remove("hidden");
+  }
+  /* tira de emojis para compartir (estilo grilla diaria): una por jugada tuya */
+  function recapStrip() {
+    const mine = ((match && match.chron) || []).filter((e) => e.me);
+    const em = (e) => (e.t !== "shot" ? (e.pick && e.pick.length ? "🟩" : "🟦") : e.sunk.length ? "💥" : !e.dmg ? "⬛" : e.charged ? "🟨" : "🟥");
+    const all = mine.map(em);
+    const cut = all.length > 30 ? all.slice(0, 29).concat("…") : all;
+    const out = [];
+    for (let i = 0; i < cut.length; i += 10) out.push(cut.slice(i, i + 10).join(""));
+    return out.join("\n");
   }
 
   function startRematch() {
@@ -2836,7 +3001,8 @@
   async function onShare() {
     if (!match) return;
     const win = ui.end.classList.contains("win");
-    const text = shareText(win);
+    const strip = recapStrip();
+    const text = shareText(win) + (strip ? "\n" + strip : "");
     const url = challengeUrl();
     const note = document.getElementById("end-note");
     try {
@@ -2848,7 +3014,7 @@
       if (e && e.name === "AbortError") return;
     }
     try {
-      await navigator.clipboard.writeText(text + " " + url);
+      await navigator.clipboard.writeText(text + (strip ? "\n" : " ") + url);
       note.textContent = "Enlace de desafío copiado. Pegalo donde quieras.";
     } catch (e) {
       note.textContent = url;
@@ -3473,6 +3639,7 @@
     remoteReady,
     battleStarted,
     stats: { ...match.stats },
+    chron: (match.chron || []).length,
     tuto: tuto ? tuto.step : null
   }) : { phase: "menu" };
 

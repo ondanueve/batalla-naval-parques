@@ -1025,3 +1025,89 @@ body.in-battle:not(.hud-open) #turnbar .act.shoot.boost small { display: block; 
 .go.daily b { font: inherit; }
 .go.daily small { font-family: Nunito, sans-serif; font-size: 0.7rem; font-weight: 800; letter-spacing: 0; text-transform: none; opacity: 0.85; }
 #ai-block.hidden { display: none; }
+
+/* RESUMEN FINAL: duelo de barras por ronda (arriba vos, abajo el rival) */
+#recap {
+  width: 100%;
+  max-width: 340px;
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  padding: 8px 9px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+.recap-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.recap-head b { font-size: 0.66rem; font-weight: 900; letter-spacing: 0.05em; text-transform: uppercase; color: #e2e8f0; }
+.recap-key { font-size: 0.6rem; font-weight: 800; color: #94a3b8; white-space: nowrap; }
+.recap-key i { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin: 0 3px 0 6px; vertical-align: 0; }
+.k-shot { background: #f97316; } .k-chg { background: #fde047; } .k-man { background: #38bdf8; }
+#recap-chart {
+  --cols: 20;
+  position: relative;
+  height: 62px;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: 1px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+#recap-chart::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(226, 232, 240, 0.35); pointer-events: none; }
+#recap-chart .col {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  transform-origin: 50% 50%;
+}
+#recap-chart .col.l0 { background: rgba(56, 189, 248, 0.07); }
+#recap-chart .col.l1 { background: rgba(250, 204, 21, 0.08); }
+#recap-chart .col.l2 { background: rgba(249, 115, 22, 0.11); }
+#recap-chart .col.l3 { background: rgba(239, 68, 68, 0.15); }
+#recap-chart .col.on, #recap-chart .col:focus-visible { background: rgba(255, 255, 255, 0.2); outline: none; }
+#recap-chart .col.key { box-shadow: inset 0 0 0 1px rgba(253, 224, 71, 0.85); }
+#recap-chart .up, #recap-chart .dn { flex: 1; display: flex; gap: 1px; padding: 0 0.5px; }
+#recap-chart .up { align-items: flex-end; }
+#recap-chart .dn { align-items: flex-start; opacity: 0.72; }
+#recap-chart .b { flex: 1; min-width: 0; height: calc(var(--h, 0.3) * 100%); border-radius: 2px; position: relative; }
+#recap-chart .up .b { border-radius: 2px 2px 0 0; }
+#recap-chart .dn .b { border-radius: 0 0 2px 2px; }
+#recap-chart .b.shot { background: #f97316; }
+#recap-chart .b.chg { background: #fde047; box-shadow: 0 0 6px rgba(253, 224, 71, 0.6); }
+#recap-chart .b.miss { background: #64748b; }
+#recap-chart .b.chg.miss { background: #a16207; box-shadow: none; }
+#recap-chart .b.man { background: #38bdf8; }
+#recap-chart .b.pick { background: #4ade80; }
+#recap-chart .b.sunk { background: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.85), 0 0 2px #f97316; }
+#recap-chart .dn .b.shot { background: #ef4444; }
+#recap-chart .dn .b.sunk { background: #fecaca; }
+#recap-chart .tag { position: absolute; left: 3px; font-size: 0.5rem; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(226, 232, 240, 0.55); pointer-events: none; text-shadow: 0 1px 2px #000; }
+#recap-chart .tag-me { top: 2px; } #recap-chart .tag-foe { bottom: 2px; }
+#recap-phases { display: flex; gap: 1px; height: 12px; }
+#recap-phases .ph { min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; text-align: center; padding: 0 1px; font-size: 0.52rem; font-weight: 900; letter-spacing: 0.02em; text-transform: uppercase; color: #94a3b8; border-top: 2px solid currentColor; line-height: 10px; }
+#recap-phases .ph.l1 { color: #fde047; } #recap-phases .ph.l2 { color: #fb923c; } #recap-phases .ph.l3 { color: #f87171; }
+#recap-cap { margin: 0; min-height: 2.5em; font-size: 0.7rem; font-weight: 800; line-height: 1.25; color: #fde68a; }
+#recap-tip { margin: 0; font-size: 0.68rem; font-weight: 700; line-height: 1.3; color: #cbd5e1; }
+@media (prefers-reduced-motion: no-preference) {
+  #end:not(.hidden) #recap-chart .col { animation: recapGrow 0.45s cubic-bezier(.2, .9, .25, 1) both; }
+}
+@keyframes recapGrow { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+/* pantallas bajas (celular girado): resumen compacto, sin cortar arriba */
+#end { justify-content: safe center; }
+@media (max-height: 560px) {
+  #end { gap: 5px; padding: 8px 12px; }
+  #recap-chart { height: 42px; }
+  #recap-tip { display: none; }
+  #end .stats { max-width: 520px; grid-template-columns: repeat(6, 1fr); }
+  #end #recap { max-width: 520px; }
+  #end .end-actions { flex-direction: row; max-width: 520px; }
+  #end .end-actions .go { padding: 9px 6px; }
+}
+/* al terminar, el HUD de batalla se retira: el final queda limpio sobre el mapa */
+body.ended #hud-top, body.ended #hud-bottom, body.ended #log, body.ended #hud-fold, body.ended #hud-toggle, body.ended #log-toggle {
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.35s ease, visibility 0s linear 0.35s;
+}
