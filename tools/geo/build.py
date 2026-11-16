@@ -151,7 +151,7 @@ def main():
                     name = '%s-%s-%d%s.jpg' % (park, terrain, k, side)
                     if not prev:
                         im.save(os.path.join(ROOT, 'maps', name), quality=82, optimize=True, progressive=True)
-                    rec[side] = {'bbox': [round(v, 5) for v in bb], 'mask': (osm_mask(osm, bb) if osm else color_mask(im)) if terrain == 'mixto' else None}
+                    rec[side] = {'bbox': [round(v, 5) for v in bb], 'mask': (osm_mask(osm, bb) if osm else color_mask(im)) }
                 out[park][terrain].append(rec)
                 if terrain == 'mixto' or prev:
                     sh = img.copy(); d = ImageDraw.Draw(sh, 'RGBA')

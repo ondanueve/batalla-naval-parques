@@ -3,172 +3,382 @@
   "agua": [
    {
     "center": [
-     -40.99,
-     -71.509
+     -40.9209,
+     -71.5268
     ],
     "km": [
      2.0,
      8.0
     ],
     "bbox": [
-     -71.5209,
-     -41.02593,
-     -71.4971,
-     -40.95407
+     -71.53869,
+     -40.95683,
+     -71.51491,
+     -40.88497
     ],
     "a": {
      "bbox": [
-      -71.5209,
-      -41.02593,
-      -71.4971,
-      -40.99
+      -71.53869,
+      -40.95683,
+      -71.51491,
+      -40.9209
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLWWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW"
+     ]
     },
     "b": {
      "bbox": [
-      -71.5209,
-      -40.99,
-      -71.4971,
-      -40.95407
+      -71.53869,
+      -40.9209,
+      -71.51491,
+      -40.88497
      ],
-     "mask": null
+     "mask": [
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
     }
    },
    {
     "center": [
-     -40.984,
-     -71.509
+     -40.9169,
+     -71.5268
     ],
     "km": [
      2.0,
      8.0
     ],
     "bbox": [
-     -71.5209,
-     -41.01993,
-     -71.4971,
-     -40.94807
+     -71.53869,
+     -40.95283,
+     -71.51491,
+     -40.88097
     ],
     "a": {
      "bbox": [
-      -71.5209,
-      -41.01993,
-      -71.4971,
-      -40.984
+      -71.53869,
+      -40.95283,
+      -71.51491,
+      -40.9169
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW"
+     ]
     },
     "b": {
      "bbox": [
-      -71.5209,
-      -40.984,
-      -71.4971,
-      -40.94807
+      -71.53869,
+      -40.9169,
+      -71.51491,
+      -40.88097
      ],
-     "mask": null
+     "mask": [
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW"
+     ]
     }
    },
    {
     "center": [
-     -40.978,
-     -71.509
+     -40.9129,
+     -71.5268
     ],
     "km": [
      2.0,
      8.0
     ],
     "bbox": [
-     -71.5209,
-     -41.01393,
-     -71.4971,
-     -40.94207
+     -71.53869,
+     -40.94883,
+     -71.51491,
+     -40.87697
     ],
     "a": {
      "bbox": [
-      -71.5209,
-      -41.01393,
-      -71.4971,
-      -40.978
+      -71.53869,
+      -40.94883,
+      -71.51491,
+      -40.9129
      ],
-     "mask": null
+     "mask": [
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLLWWWWWW"
+     ]
     },
     "b": {
      "bbox": [
-      -71.5209,
-      -40.978,
-      -71.4971,
-      -40.94207
+      -71.53869,
+      -40.9129,
+      -71.51491,
+      -40.87697
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW"
+     ]
     }
    },
    {
     "center": [
-     -40.972,
-     -71.509
+     -40.9089,
+     -71.5268
     ],
     "km": [
      2.0,
      8.0
     ],
     "bbox": [
-     -71.5209,
-     -41.00793,
-     -71.4971,
-     -40.93607
+     -71.53869,
+     -40.94483,
+     -71.51491,
+     -40.87297
     ],
     "a": {
      "bbox": [
-      -71.5209,
-      -41.00793,
-      -71.4971,
-      -40.972
+      -71.53869,
+      -40.94483,
+      -71.51491,
+      -40.9089
      ],
-     "mask": null
+     "mask": [
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLLWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW"
+     ]
     },
     "b": {
      "bbox": [
-      -71.5209,
-      -40.972,
-      -71.4971,
-      -40.93607
+      -71.53869,
+      -40.9089,
+      -71.51491,
+      -40.87297
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
     }
    },
    {
     "center": [
-     -40.966,
-     -71.509
+     -40.9049,
+     -71.5268
     ],
     "km": [
      2.0,
      8.0
     ],
     "bbox": [
-     -71.5209,
-     -41.00193,
-     -71.4971,
-     -40.93007
+     -71.53869,
+     -40.94083,
+     -71.51491,
+     -40.86897
     ],
     "a": {
      "bbox": [
-      -71.5209,
-      -41.00193,
-      -71.4971,
-      -40.966
+      -71.53869,
+      -40.94083,
+      -71.51491,
+      -40.9049
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLLWWWWWWW"
+     ]
     },
     "b": {
      "bbox": [
-      -71.5209,
-      -40.966,
-      -71.4971,
-      -40.93007
+      -71.53869,
+      -40.9049,
+      -71.51491,
+      -40.86897
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLLWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
     }
    }
   ],
@@ -195,7 +405,28 @@
       -71.61716,
       -40.962
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -204,7 +435,28 @@
       -71.61716,
       -40.9081
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    },
    {
@@ -229,7 +481,28 @@
       -71.61716,
       -40.956
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -238,7 +511,28 @@
       -71.61716,
       -40.9021
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    },
    {
@@ -263,7 +557,28 @@
       -71.61716,
       -40.95
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -272,7 +587,28 @@
       -71.61716,
       -40.8961
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLW",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    },
    {
@@ -297,7 +633,28 @@
       -71.61716,
       -40.944
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -306,7 +663,28 @@
       -71.61716,
       -40.8901
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLWWWW",
+      "LLLLLLLLWW",
+      "LLLLLLLLWW",
+      "LLLLLLLLLW",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    },
    {
@@ -331,7 +709,28 @@
       -71.61716,
       -40.938
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -340,7 +739,28 @@
       -71.61716,
       -40.8841
      ],
-     "mask": null
+     "mask": [
+      "LLLWWWWWWW",
+      "LLLLLWWWWW",
+      "LLLLLLWWWW",
+      "LLLLLLLWWW",
+      "LLLLLLLLWW",
+      "LLLLLLLLLW",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    }
   ],
@@ -731,172 +1151,382 @@
   "agua": [
    {
     "center": [
-     -25.668,
-     -54.432
-    ],
-    "km": [
-     2.0,
-     8.0
-    ],
-    "bbox": [
-     -54.44197,
-     -25.70393,
-     -54.42203,
-     -25.63207
-    ],
-    "a": {
-     "bbox": [
-      -54.44197,
-      -25.70393,
-      -54.42203,
-      -25.668
-     ],
-     "mask": null
-    },
-    "b": {
-     "bbox": [
-      -54.44197,
-      -25.668,
-      -54.42203,
-      -25.63207
-     ],
-     "mask": null
-    }
-   },
-   {
-    "center": [
-     -25.668,
-     -54.43
-    ],
-    "km": [
-     2.0,
-     8.0
-    ],
-    "bbox": [
-     -54.43997,
-     -25.70393,
-     -54.42003,
-     -25.63207
-    ],
-    "a": {
-     "bbox": [
-      -54.43997,
-      -25.70393,
-      -54.42003,
-      -25.668
-     ],
-     "mask": null
-    },
-    "b": {
-     "bbox": [
-      -54.43997,
-      -25.668,
-      -54.42003,
-      -25.63207
-     ],
-     "mask": null
-    }
-   },
-   {
-    "center": [
-     -25.668,
-     -54.428
-    ],
-    "km": [
-     2.0,
-     8.0
-    ],
-    "bbox": [
-     -54.43797,
-     -25.70393,
-     -54.41803,
-     -25.63207
-    ],
-    "a": {
-     "bbox": [
-      -54.43797,
-      -25.70393,
-      -54.41803,
-      -25.668
-     ],
-     "mask": null
-    },
-    "b": {
-     "bbox": [
-      -54.43797,
-      -25.668,
-      -54.41803,
-      -25.63207
-     ],
-     "mask": null
-    }
-   },
-   {
-    "center": [
-     -25.668,
+     -25.6844,
      -54.426
     ],
     "km": [
-     2.0,
-     8.0
+     1.0,
+     4.0
     ],
     "bbox": [
-     -54.43597,
-     -25.70393,
-     -54.41603,
-     -25.63207
+     -54.43098,
+     -25.70237,
+     -54.42102,
+     -25.66643
     ],
     "a": {
      "bbox": [
-      -54.43597,
-      -25.70393,
-      -54.41603,
-      -25.668
+      -54.43098,
+      -25.70237,
+      -54.42102,
+      -25.6844
      ],
-     "mask": null
+     "mask": [
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWL",
+      "WWWWWWWWLL",
+      "LLWWWWWLLW",
+      "WWWWWWWWWL",
+      "WWWWWWWLLL"
+     ]
     },
     "b": {
      "bbox": [
-      -54.43597,
-      -25.668,
-      -54.41603,
-      -25.63207
+      -54.43098,
+      -25.6844,
+      -54.42102,
+      -25.66643
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWL",
+      "LWWWWWWWWL",
+      "LWWWWWWWWL",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW"
+     ]
     }
    },
    {
     "center": [
-     -25.668,
-     -54.424
+     -25.6804,
+     -54.426
     ],
     "km": [
-     2.0,
-     8.0
+     1.0,
+     4.0
     ],
     "bbox": [
-     -54.43397,
-     -25.70393,
-     -54.41403,
-     -25.63207
+     -54.43098,
+     -25.69837,
+     -54.42102,
+     -25.66243
     ],
     "a": {
      "bbox": [
-      -54.43397,
-      -25.70393,
-      -54.41403,
-      -25.668
+      -54.43098,
+      -25.69837,
+      -54.42102,
+      -25.6804
      ],
-     "mask": null
+     "mask": [
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWL"
+     ]
     },
     "b": {
      "bbox": [
-      -54.43397,
-      -25.668,
-      -54.41403,
-      -25.63207
+      -54.43098,
+      -25.6804,
+      -54.42102,
+      -25.66243
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWL",
+      "LWWWWWWWWL",
+      "LWWWWWWWWL",
+      "LWWWWWWWWW"
+     ]
+    }
+   },
+   {
+    "center": [
+     -25.6764,
+     -54.426
+    ],
+    "km": [
+     1.0,
+     4.0
+    ],
+    "bbox": [
+     -54.43098,
+     -25.69437,
+     -54.42102,
+     -25.65843
+    ],
+    "a": {
+     "bbox": [
+      -54.43098,
+      -25.69437,
+      -54.42102,
+      -25.6764
+     ],
+     "mask": [
+      "LWWWWWWWWW",
+      "LWWWWWWWWL",
+      "LWWWWWWWWL",
+      "LWWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
+    },
+    "b": {
+     "bbox": [
+      -54.43098,
+      -25.6764,
+      -54.42102,
+      -25.65843
+     ],
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
+    }
+   },
+   {
+    "center": [
+     -25.6724,
+     -54.426
+    ],
+    "km": [
+     1.0,
+     4.0
+    ],
+    "bbox": [
+     -54.43098,
+     -25.69037,
+     -54.42102,
+     -25.65443
+    ],
+    "a": {
+     "bbox": [
+      -54.43098,
+      -25.69037,
+      -54.42102,
+      -25.6724
+     ],
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWL",
+      "LWWWWWWWWL",
+      "LWWWWWWWWL",
+      "LWWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW"
+     ]
+    },
+    "b": {
+     "bbox": [
+      -54.43098,
+      -25.6724,
+      -54.42102,
+      -25.65443
+     ],
+     "mask": [
+      "LLLWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
+    }
+   },
+   {
+    "center": [
+     -25.6684,
+     -54.426
+    ],
+    "km": [
+     1.0,
+     4.0
+    ],
+    "bbox": [
+     -54.43098,
+     -25.68637,
+     -54.42102,
+     -25.65043
+    ],
+    "a": {
+     "bbox": [
+      -54.43098,
+      -25.68637,
+      -54.42102,
+      -25.6684
+     ],
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWL",
+      "LWWWWWWWWL",
+      "LWWWWWWWWL",
+      "LWWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLWWWWWWWW"
+     ]
+    },
+    "b": {
+     "bbox": [
+      -54.43098,
+      -25.6684,
+      -54.42102,
+      -25.65043
+     ],
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLWW",
+      "LLLLLLWWWW",
+      "LLLLLWWWWW",
+      "LLLWWWWWWW",
+      "LLLWWWWWWW",
+      "LLWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
     }
    }
   ],
@@ -923,7 +1553,28 @@
       -54.38304,
       -25.702
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -932,7 +1583,28 @@
       -54.38304,
       -25.65888
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    },
    {
@@ -957,7 +1629,28 @@
       -54.38304,
       -25.696
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -966,7 +1659,28 @@
       -54.38304,
       -25.65288
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    },
    {
@@ -991,7 +1705,28 @@
       -54.38304,
       -25.69
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -1000,7 +1735,28 @@
       -54.38304,
       -25.64688
      ],
-     "mask": null
+     "mask": [
+      "WLLWLLLLLL",
+      "WWWWLLLLLL",
+      "WWLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    },
    {
@@ -1025,7 +1781,28 @@
       -54.38304,
       -25.684
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -1034,7 +1811,28 @@
       -54.38304,
       -25.64088
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWLLLL",
+      "WWWWWLLLLL",
+      "WWWWWLLLLL",
+      "WLLWLLLLLL",
+      "WWWLLLLLLL",
+      "WWLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    },
    {
@@ -1059,7 +1857,28 @@
       -54.38304,
       -25.678
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -1068,7 +1887,28 @@
       -54.38304,
       -25.63488
      ],
-     "mask": null
+     "mask": [
+      "LLLWWWWWLL",
+      "LLWWWWWLLL",
+      "LWWWWWLLLL",
+      "WWWWWWLLLL",
+      "WWWWWLLLLL",
+      "WWWWWLLLLL",
+      "LLWWLLLLLL",
+      "WWWLLLLLLL",
+      "WLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    }
   ],
@@ -1479,7 +2319,28 @@
       -73.0329,
       -50.428
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LLWWWWWWWW",
+      "LLLLWWWWWW"
+     ]
     },
     "b": {
      "bbox": [
@@ -1488,7 +2349,28 @@
       -73.0329,
       -50.39207
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW"
+     ]
     }
    },
    {
@@ -1513,7 +2395,28 @@
       -73.0329,
       -50.424
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
     },
     "b": {
      "bbox": [
@@ -1522,7 +2425,28 @@
       -73.0329,
       -50.38807
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWL",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
     }
    },
    {
@@ -1547,7 +2471,28 @@
       -73.0329,
       -50.42
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
     },
     "b": {
      "bbox": [
@@ -1556,7 +2501,28 @@
       -73.0329,
       -50.38407
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWL",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
     }
    },
    {
@@ -1581,7 +2547,28 @@
       -73.0329,
       -50.416
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
     },
     "b": {
      "bbox": [
@@ -1590,7 +2577,28 @@
       -73.0329,
       -50.38007
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
     }
    },
    {
@@ -1615,7 +2623,28 @@
       -73.0329,
       -50.412
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "LWWWWWWWWW",
+      "LWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
     },
     "b": {
      "bbox": [
@@ -1624,7 +2653,28 @@
       -73.0329,
       -50.37607
      ],
-     "mask": null
+     "mask": [
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWL",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW",
+      "WWWWWWWWWW"
+     ]
     }
    }
   ],
@@ -1651,7 +2701,28 @@
       -72.89885,
       -50.42
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -1660,7 +2731,28 @@
       -72.89885,
       -50.3661
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    },
    {
@@ -1685,7 +2777,28 @@
       -72.88885,
       -50.42
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -1694,7 +2807,28 @@
       -72.88885,
       -50.3661
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    },
    {
@@ -1719,7 +2853,28 @@
       -72.87885,
       -50.42
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -1728,7 +2883,28 @@
       -72.87885,
       -50.3661
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    },
    {
@@ -1753,7 +2929,28 @@
       -72.86885,
       -50.42
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -1762,7 +2959,28 @@
       -72.86885,
       -50.3661
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    },
    {
@@ -1787,7 +3005,28 @@
       -72.85885,
       -50.42
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     },
     "b": {
      "bbox": [
@@ -1796,7 +3035,28 @@
       -72.85885,
       -50.3661
      ],
-     "mask": null
+     "mask": [
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL",
+      "LLLLLLLLLL"
+     ]
     }
    }
   ],

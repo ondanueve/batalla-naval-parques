@@ -192,11 +192,22 @@
       </div>
       <div id="place-msg" class="hidden" role="status" aria-live="polite"><b></b><small></small></div>
       <button type="button" id="ready" class="hidden">Estoy listo</button>
+      <button type="button" id="place-menu" aria-label="Menú">Menú</button>
       <div id="place-ctl" class="hidden" role="group" aria-label="Unidad pendiente"><button type="button" id="pc-rot" aria-label="Girar (R)" title="Girar (R)">⟳</button><button type="button" id="pc-ok" aria-label="Confirmar (Enter)" title="Confirmar (Enter)">✓</button></div>
       <aside id="log" class="ov" aria-label="Crónica de la batalla"><h3>Crónica</h3><ol id="log-list"></ol></aside>
     </section>
   </div>
   <div id="hurt"></div>
+  <div id="quit" class="hidden" role="dialog" aria-modal="true" aria-labelledby="quit-title">
+    <div class="quit-card">
+      <h2 id="quit-title">¿Abandonar la partida?</h2>
+      <p id="quit-text">Se pierde el progreso.</p>
+      <div class="quit-actions">
+        <button type="button" class="go" id="quit-stay">Seguir jugando</button>
+        <button type="button" class="go ghostbtn" id="quit-leave">Abandonar</button>
+      </div>
+    </div>
+  </div>
   <div id="juke-panel" class="hidden" role="dialog" aria-label="Jukebox">
     <h2>JUKEBOX</h2>
     <p id="juke-title">Buscando señal…</p>

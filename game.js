@@ -169,39 +169,63 @@
   let rematch = { me: false, them: false };
   let tuto = null; // { step, pending } while the guided tutorial is on
   let tutoForce = false;
-  const TUTO_COPY = {
+  // El tutorial enseña solo Clásico. El de Reloaded queda guardado (RELOADED_TUTO) hasta que se rehaga ese modo.
+  const RELOADED_TUTO = false;
+  const TUTO_RELOADED = {
     0: ["PREPARACIÓN", "Colocá tu flota unidad por unidad. Tocá «Estoy listo» para empezar."],
     1: ["PASO 1 DE 3 · DISPARAR", "Disparar da daño ahora. Tocá cualquier celda del mapa enemigo: no sabés dónde está nadie."],
     2: ["PASO 2 DE 3 · DESARROLLAR", "Maniobrar no hace daño, pero rinde después. Tocá «Maniobrar» y elegí «Apuntar»: el próximo disparo cae en cruz."],
     3: ["PASO 3 DE 3 · COBRAR", "Tocá «Disparar» y una celda: tu carga cae en cruz. Esa es la inversión pagando."],
-    4: ["¡LISTO!", "Disparar gana material. Maniobrar gana posición. Repetir una celda es válido: lo que ves viejo puede haber cambiado."]
+    4: ["¡LISTO!", "Disparar gana material. Maniobrar gana posición. Repetir una celda es válido: lo que ves viejo puede haber cambiado.", "Entendido"]
   };
+  // [título, texto, botón (null = avanza cuando hacés la acción)]
+  const TUTO_CLASSIC = {
+    0: ["1 DE 4 · UBICÁ TU FLOTA", "Tocá el agua donde va el barco. Arrastralo para moverlo, tocalo o ⟳ para girarlo y ✓ para dejarlo. En tierra no entra.", null],
+    1: ["2 DE 4 · A LA GUERRA", "Flota lista. Tocá «Estoy listo».", null],
+    2: ["3 DE 4 · DISPARÁ", "Tocá una celda del mapa enemigo. No sabés dónde están: probá.", null],
+    3: ["4 DE 4 · RESULTADO", "Agua: no había nada. Fuego: le diste. Hundido: cayó el barco entero. Después tira el rival.", "Siguiente"],
+    4: ["¡LISTO!", "Gana quien hunda primero toda la flota enemiga.", "Entendido"]
+  };
+  let tutoKind = "clasico";
+  function tutoCopy() { return tutoKind === "reloaded" ? TUTO_RELOADED : TUTO_CLASSIC; }
 
   function tutoSave() { store.set(KEY_TUTO, "1"); }
   function pulseOn(el, on) { if (el) el.classList.toggle("pulse", !!on); }
   function tutoRender() {
     const box = document.getElementById("coach");
     if (!box) return;
+    document.body.classList.toggle("tuto-on", !!tuto);
     if (!tuto) {
       box.classList.add("hidden");
       pulseOn(ui.ready, false);
       requestAnimationFrame(fit);
       return;
     }
-    const c = TUTO_COPY[tuto.step];
+    const c = tutoCopy()[tuto.step].slice();
+    if (tutoKind === "clasico" && tuto.step === 0 && opts.terrain !== "agua") {
+      c[1] = opts.terrain === "tierra"
+        ? "Tocá la tierra donde va el tanque. Arrastralo para moverlo, tocalo o ⟳ para girarlo y ✓ para dejarlo. En el agua no entra."
+        : "Tocá donde va la unidad: barcos al agua, tanques a tierra. Arrastrala para moverla, tocala o ⟳ para girarla y ✓ para dejarla.";
+    }
+    const okBtn = document.getElementById("coach-ok");
     document.getElementById("coach-step").textContent = c[0];
     document.getElementById("coach-text").textContent = c[1];
-    document.getElementById("coach-ok").classList.toggle("hidden", tuto.step !== 4);
+    okBtn.textContent = c[2] || "Entendido";
+    okBtn.classList.toggle("hidden", !c[2]);
     document.getElementById("coach-skip").classList.toggle("hidden", tuto.step === 4);
+    box.dataset.step = String(tuto.step);
     box.classList.remove("hidden");
-    pulseOn(ui.ready, tuto.step === 0);
+    pulseOn(ui.ready, tutoKind === "clasico" ? tuto.step === 1 : tuto.step === 0);
     requestAnimationFrame(fit);
   }
   function tutoStart() {
-    if (opts.mode !== "pvc" || classic()) return;
+    if (opts.mode !== "pvc") return;
+    if (!classic() && !RELOADED_TUTO) return;
     if (store.get(KEY_TUTO) && !tutoForce) return;
     tutoForce = false;
+    tutoKind = classic() ? "clasico" : "reloaded";
     tuto = { step: 0, pending: 0 };
+    if (tutoKind === "clasico") stopClock(); // aprendiendo no hay reloj: nada se completa solo
     tutoRender();
   }
   function tutoEnd() {
@@ -210,14 +234,28 @@
     tutoSave();
     tutoRender();
   }
+  function tutoGo(step) { tuto.step = step; tuto.pending = 0; if (step === 4) tutoSave(); tutoRender(); hudDirty = true; }
+  function tutoNext() {
+    if (!tuto) return;
+    if (tuto.step >= 4) { tutoEnd(); return; }
+    tutoGo(tuto.step + 1);
+  }
   function tutoEvent(name) {
     if (!tuto) return;
+    if (tutoKind === "clasico") {
+      if (name === "placed" && tuto.step === 0) tutoGo(1);
+      else if (name === "unplaced" && tuto.step === 1) tutoGo(0);
+      else if (name === "ready" && tuto.step <= 1) tutoGo(2);
+      else if (name === "shown" && tuto.step === 2) tutoGo(3);
+      return;
+    }
     if (name === "ready" && tuto.step === 0) { tuto.step = 1; tutoRender(); }
     else if (name === "shot" && tuto.step === 1) tuto.pending = 2;
     else if (name === "man" && tuto.step === 2) tuto.pending = 3;
     else if (name === "shot" && tuto.step === 3) tuto.pending = 4;
   }
   function tutoTurn() {
+    if (tutoKind === "clasico") return;
     if (tuto && tuto.pending) {
       tuto.step = tuto.pending;
       tuto.pending = 0;
@@ -235,7 +273,7 @@
     if (document.body.classList.contains("in-battle") && text) {
       document.body.classList.add("say-on");
       clearTimeout(sayT);
-      sayT = setTimeout(() => document.body.classList.remove("say-on"), 3600);
+      sayT = setTimeout(() => document.body.classList.remove("say-on"), tuto ? 9000 : 5200);
     }
     if (logList && text && text !== lastSay && !/^(Tu turno\.|El invasor apunta|El invasor piensa|Disparo en camino|Disparar da|Esperando|Bombardeo:)/.test(text)) {
       lastSay = text;
@@ -351,6 +389,8 @@
   }
 
   function showMenu() {
+    const qb = document.getElementById("quit");
+    if (qb) qb.classList.add("hidden");
     stopClock();
     destroyNet();
     match = null;
@@ -369,6 +409,7 @@
   }
 
   function showBattle() {
+    try { if (!(history.state && history.state.parques)) history.pushState({ parques: 1 }, ""); } catch (e) { /* sin historial */ }
     ui.menu.classList.add("hidden");
     ui.battle.classList.remove("hidden");
     ui.end.classList.add("hidden");
@@ -593,8 +634,8 @@
       b.setAttribute("aria-pressed", (sel.mode === "move" && k === "mover") || (sel.mode === "watch" && k === "reconocer") || (sel.mode === "repair" && k === "reparar") ? "true" : "false");
       b.title = states[k].ok ? "" : states[k].why;
     });
-    pulseOn(ui.dev, !!tuto && tuto.step === 2 && !sel.open && myTurn);
-    pulseOn(ui.shoot, !!tuto && (tuto.step === 3 || tuto.step === 1) && myTurn && !sel.open);
+    pulseOn(ui.dev, !!tuto && tutoKind === "reloaded" && tuto.step === 2 && !sel.open && myTurn);
+    pulseOn(ui.shoot, !!tuto && tutoKind === "reloaded" && (tuto.step === 3 || tuto.step === 1) && myTurn && !sel.open);
     const ap = ui.manu.querySelector('[data-man="apuntar"]');
     pulseOn(ap, !!tuto && tuto.step === 2 && open);
   }
@@ -651,7 +692,7 @@
     let sub = "";
     if (placing) {
       const next = match.local.find((u) => u.unplaced);
-      const secs = Math.max(0, clockLeft) + " s";
+      const secs = tuto ? "sin apuro" : Math.max(0, clockLeft) + " s";
       const cur = hand ? hand.ship : next;
       if (hand && !next) {
         main = "Ajustá tu " + cur.name.toLowerCase() + ".";
@@ -659,7 +700,7 @@
       } else if (next) {
         main = "Posicioná tu " + cur.name.toLowerCase() + ".";
         sub = placeNote || (secs + " · " + (hand && hand.set ? "arrastrá · tocá para girar · ✓" : "tocá dónde va"));
-        if (tuto && tuto.step === 0 && !placeNote) sub = "Tutorial: " + sub;
+        
       } else {
         main = "Flota lista.";
         sub = placeNote || (secs + " · tocá una unidad para ajustarla, o Estoy listo");
@@ -822,7 +863,7 @@
         SPARKLES.forEach((sp) => {
           const cx = Math.min(C.W - 1, Math.floor(sp.x * C.W));
           const cy = Math.min(C.H - 1, Math.floor(sp.y * C.H));
-          if (isLand(cx, cy) && opts.terrain !== "agua") return;
+          if (isLand(cx, cy)) return;
           const a = Math.max(0, Math.sin(time / 600 + sp.ph));
           if (a < 0.2) return;
           ctx.globalAlpha = a * 0.55;
@@ -859,6 +900,21 @@
       ctx.fillRect(g.padL, g.padT, gw, gh);
     }
 
+    if (opts.terrain !== "mixto") {
+      // agua o tierra: las celdas del otro tipo quedan apagadas (ahí no va ninguna unidad)
+      const wantLand = opts.terrain === "tierra";
+      for (let y = 0; y < C.H; y++) {
+        for (let x = 0; x < C.W; x++) {
+          if (isLand(x, y) === wantLand) continue;
+          const p = cellPx(g, x, y);
+          ctx.fillStyle = "rgba(15, 23, 42, .38)";
+          ctx.fillRect(p.x, p.y, g.cellW, g.cellH);
+          ctx.strokeStyle = "rgba(250, 204, 21, .18)";
+          ctx.lineWidth = Math.max(1, g.dpr);
+          ctx.beginPath(); ctx.moveTo(p.x, p.y + g.cellH); ctx.lineTo(p.x + g.cellW, p.y); ctx.stroke();
+        }
+      }
+    }
     if (opts.terrain === "mixto") {
       for (let y = 0; y < C.H; y++) {
         for (let x = 0; x < C.W; x++) {
@@ -2075,7 +2131,7 @@
         trauma = Math.min(1, trauma + 0.12);
         if (jk && jk.sfx.hit) jk.sfx.hit();
       }, 260 + i * 140));
-      const land = opts.terrain === "tierra" || (opts.terrain === "mixto" && isLand(cells[0].x, cells[0].y));
+      const land = isLand(cells[0].x, cells[0].y);
       setTimeout(() => cells.forEach((c, i) => rings.push({ x: c.x, y: c.y, life: 1, color: land ? "#d6d3d1" : "#7dd3fc", size: 3.2, w: 2, delay: i * 0.08 })), 300 + cells.length * 140);
     }
     shake(incoming, 1);
@@ -2551,7 +2607,7 @@
   function flashNote(text) {
     placeNote = text;
     clearTimeout(placeNoteT);
-    placeNoteT = setTimeout(() => { placeNote = ""; hudDirty = true; }, 2200);
+    placeNoteT = setTimeout(() => { placeNote = ""; hudDirty = true; }, tuto ? 6000 : 3800);
     hudDirty = true;
   }
   // la posición válida más cercana (para girar o soltar cerca del borde sin pelearse con la grilla)
@@ -2717,7 +2773,7 @@
     blip();
     if (quiet) return;
     nextHand();
-    if (placedAll()) say("Flota completa. Tocá una unidad para ajustarla o Estoy listo.");
+    if (placedAll()) { say("Flota completa. Tocá una unidad para ajustarla o Estoy listo."); tutoEvent("placed"); }
     else say(wasNew ? "Lista. Ahora la que sigue." : "Reacomodada.");
   }
 
@@ -3086,6 +3142,7 @@
       rememberRemote(out.results);
       tutoEvent("shot");
       await playResults(out.results, false, out.pattern);
+      tutoEvent("shown");
       return;
     }
     match.stats.man++;
@@ -3482,6 +3539,14 @@
     if (!msg || !msg.t) return;
     if (msg.t !== "here" && msg.t !== "hello") netNote("<", msg);
     if (msg.t === "clash") { showMenu(); noteMenu(typeof msg.why === "string" ? msg.why.slice(0, 160) : "El rival canceló: las reglas no coinciden."); return; }
+    if (msg.t === "bye") {
+      if (!match || match.phase === "end") return;
+      if (match.phase === "lobby" || match.phase === "place") { showMenu(); noteMenu("Tu rival abandonó la partida."); return; }
+      finish(true);
+      document.getElementById("end-note").textContent = "Tu rival abandonó la partida.";
+      document.getElementById("rematch").disabled = true;
+      return;
+    }
     if (msg.t === "here") {
       sendHello();
       if (match && match.phase === "lobby") beginPlace();
@@ -3861,7 +3926,56 @@
     });
   });
   document.getElementById("ai-hint").textContent = AI_HINT[opts.ai];
-  document.getElementById("back").addEventListener("click", showMenu);
+  // Menú en plena partida: primero confirmar (nada se destruye sin «Abandonar»)
+  const quitBox = document.getElementById("quit");
+  let quitPaused = 0;
+  function inGame() { return !!match && match.phase !== "end" && ui.battle && !ui.battle.classList.contains("hidden"); }
+  function quitOpen() { return !!quitBox && !quitBox.classList.contains("hidden"); }
+  function askQuit() {
+    if (!inGame()) { showMenu(); return; }
+    if (quitOpen()) return;
+    const pvp = opts.mode === "pvp";
+    document.getElementById("quit-text").textContent = pvp
+      ? "Se pierde el progreso y tu rival gana por abandono."
+      : "Se pierde el progreso.";
+    // contra la máquina el reloj se congela mientras decidís
+    if (!pvp && clockId) { clearInterval(clockId); clockId = 0; quitPaused = clockLeft; }
+    quitBox.classList.remove("hidden");
+    document.getElementById("quit-stay").focus();
+    blip();
+  }
+  function closeQuit() {
+    if (!quitOpen()) return;
+    quitBox.classList.add("hidden");
+    if (quitPaused && match && match.phase !== "end") {
+      const left = quitPaused;
+      startClock();
+      clockLeft = left;
+      ui.clock.textContent = String(left);
+    }
+    quitPaused = 0;
+  }
+  function leaveGame() {
+    quitPaused = 0;
+    quitBox.classList.add("hidden");
+    if (opts.mode === "pvp") send({ t: "bye" });
+    setTimeout(showMenu, opts.mode === "pvp" ? 120 : 0);
+  }
+  document.getElementById("back").addEventListener("click", askQuit);
+  document.getElementById("place-menu").addEventListener("click", askQuit);
+  document.getElementById("quit-stay").addEventListener("click", () => { closeQuit(); blip(); });
+  document.getElementById("quit-leave").addEventListener("click", leaveGame);
+  quitBox.addEventListener("click", (e) => { if (e.target === quitBox) closeQuit(); });
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (quitOpen()) { e.preventDefault(); closeQuit(); return; }
+    if (ui.battle && !ui.battle.classList.contains("hidden")) { e.preventDefault(); askQuit(); }
+  });
+  // botón «atrás» del navegador o del celular: misma confirmación
+  window.addEventListener("popstate", () => {
+    if (inGame()) { try { history.pushState({ parques: 1 }, ""); } catch (e) { /* sin historial */ } askQuit(); }
+    else if (ui.battle && !ui.battle.classList.contains("hidden")) showMenu();
+  });
   document.getElementById("again").addEventListener("click", showMenu);
   document.getElementById("rematch").addEventListener("click", onRematchClick);
   document.getElementById("share").addEventListener("click", onShare);
@@ -3959,12 +4073,13 @@
   });
 
   document.getElementById("coach-skip").addEventListener("click", () => { tutoEnd(); say("Tutorial salteado. Podés repetirlo desde el menú."); });
-  document.getElementById("coach-ok").addEventListener("click", () => tutoEnd());
+  document.getElementById("coach-ok").addEventListener("click", () => { tutoNext(); blip(); });
   document.getElementById("how").addEventListener("click", () => {
     const pvc = document.querySelector("#modes [data-mode=pvc]");
     if (pvc) pvc.click();
-    const rl = document.querySelector("#rules [data-rules=reloaded]");
-    if (rl && classic()) rl.click(); // el tutorial enseña Reloaded
+    // el tutorial enseña Clásico (el de Reloaded está guardado hasta que se rehaga ese modo)
+    const cl = document.querySelector("#rules [data-rules=clasico]");
+    if (cl && !classic() && !RELOADED_TUTO) cl.click();
     tutoForce = true;
     startGame();
   });
@@ -4024,6 +4139,9 @@
     lifted: !!hand,
     terrain: opts.terrain,
     crop: opts.crop,
+    board: myBoard(),
+    land: (() => { const o = []; for (let y = 0; y < C.H; y++) for (let x = 0; x < C.W; x++) if (C.isLand(opts.terrain, opts.map, myBoard(), x, y)) o.push([x, y]); return o; })(),
+    quit: !document.getElementById("quit").classList.contains("hidden"),
     map: opts.map,
     hp: hpOf(match.local, match.hitsOnLocal).left,
     turnNo: match.shared ? match.shared.turnNo : 0,

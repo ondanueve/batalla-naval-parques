@@ -161,26 +161,160 @@ async function suiteAi() {
 }
 
 async function suiteTuto() {
-  console.log('TUTO');
+  console.log('TUTO (Clásico, sin mensajes que se van solos)');
   for (const tag of ['mobile', 'desktop']) {
-    const { page: p, log } = await newGame(VPS[tag], {}, true);
-    ok((await st(p)).tuto === 0, `${tag}: paso 0 en colocación`);
-    await placeAll(p); await p.click('#ready'); await waitAttack(p); await wait(300);
-    ok((await st(p)).tuto === 1, `${tag}: paso 1 (disparar)`);
-    await shot(p, `tuto-${tag}-1`);
-    await clickCell(p, 5, 10); await wait(300); await waitAttack(p, 25000); await wait(300);
-    ok((await st(p)).tuto === 2, `${tag}: paso 2 (maniobrar)`);
-    await shot(p, `tuto-${tag}-2`);
-    await p.click('#act-dev'); await wait(200); await p.click('#manu [data-man=apuntar]'); await wait(300); await waitAttack(p, 25000); await wait(300);
-    ok((await st(p)).tuto === 3, `${tag}: paso 3 (cobrar)`);
-    await clickCell(p, 6, 9); await wait(300); await waitAttack(p, 25000); await wait(400);
-    ok((await st(p)).tuto === 4, `${tag}: paso 4 (listo) → ${(await st(p)).tuto}`);
-    await shot(p, `tuto-${tag}-4`);
+    const g = await mk(b, { viewport: VPS[tag], fresh: true, ctx: tag === 'mobile' ? { hasTouch: true, isMobile: true } : {} });
+    const { page: p, log } = g;
+    await p.goto(BASE); await p.waitForSelector('#intro-go'); await wait(400); await p.click('#intro-go'); await wait(300);
+    // el selector de reglas apunta a Reloaded: el tutorial igual enseña Clásico
+    if (await p.isVisible('#rules [data-rules=reloaded]')) await p.click('#rules [data-rules=reloaded]');
+    await p.click('#maps [data-map=nahuel]'); await p.click('#terrains [data-terrain=agua]');
+    await p.click('#how');
+    await p.waitForFunction(() => window.__parquesState().phase === 'place', null, { timeout: 20000 });
+    let s = await st(p);
+    ok(s.rules === 'clasico', `${tag}: el tutorial juega Clásico (${s.rules})`);
+    ok(s.tuto === 0 && /UBICÁ TU FLOTA/.test(await p.textContent('#coach-step')), `${tag}: paso 1 = ubicar la flota`);
+    ok(await p.isHidden('#clock'), `${tag}: sin reloj mientras aprendés`);
+    if (tag === 'mobile') await wait(500), await shot(p, 'tuto-clasico-1-mobile');
+    await wait(7000);
+    ok((await st(p)).tuto === 0 && await p.isVisible('#coach') && (await st(p)).phase === 'place', `${tag}: tras 7 s el mensaje sigue y nada se autocompleta`);
+    await placeAll(p); await wait(200);
+    ok((await st(p)).tuto === 1 && await p.isVisible('#coach'), `${tag}: paso 2 = Estoy listo`);
+    await p.click('#ready'); await waitAttack(p); await wait(300);
+    ok((await st(p)).tuto === 2 && /DISPARÁ/.test(await p.textContent('#coach-step')), `${tag}: paso 3 = disparar`);
+    if (tag === 'mobile') await wait(500), await shot(p, 'tuto-clasico-3-mobile');
+    await wait(6000);
+    ok((await st(p)).tuto === 2, `${tag}: el paso de disparar no se va solo`);
+    await clickCell(p, 5, 10);
+    await p.waitForFunction(() => window.__parquesState().tuto === 3, null, { timeout: 20000 });
+    ok(/RESULTADO/.test(await p.textContent('#coach-step')) && await p.isVisible('#coach-ok') && (await p.textContent('#coach-ok')) === 'Siguiente', `${tag}: paso 4 = leer el tiro, con «Siguiente»`);
+    await waitAttack(p, 25000); await wait(6000);
+    ok((await st(p)).tuto === 3, `${tag}: el paso de leer el tiro espera a «Siguiente»`);
+    if (tag === 'mobile') await wait(500), await shot(p, 'tuto-clasico-4-mobile');
+    await p.click('#coach-ok'); await wait(200);
+    ok((await st(p)).tuto === 4 && /Gana quien hunda/.test(await p.textContent('#coach-text')), `${tag}: cierre con la condición de victoria en una línea`);
+    if (tag === 'mobile') await wait(500), await shot(p, 'tuto-clasico-5-mobile');
     await p.click('#coach-ok'); await wait(200);
     ok(!(await p.isVisible('#coach')), `${tag}: coach se cierra`);
     ok(clean(log).length === 0, `${tag}: consola limpia ${JSON.stringify(clean(log))}`);
+    await g.ctx.close();
+  }
+}
+
+async function suiteQuit() {
+  console.log('MENÚ EN PARTIDA (confirmación)');
+  for (const tag of ['mobile', 'desktop']) {
+    const { page: p, log } = await newGame(VPS[tag], { map: 'nahuel', terrain: 'agua', rules: null });
+    // colocación
+    const c0 = await p.textContent('#clock');
+    await p.click('#place-menu'); await wait(250);
+    let s = await st(p);
+    ok(s.quit && s.phase === 'place' && await p.isVisible('#quit-stay') && await p.isVisible('#quit-leave'), `${tag}: Menú en colocación pregunta`);
+    if (tag === 'mobile') await shot(p, 'quit-confirm-place-mobile');
+    await wait(2200);
+    ok((await p.textContent('#clock')) === c0 || (await p.isHidden('#clock')), `${tag}: contra la máquina el reloj se congela con el diálogo abierto`);
+    await p.click('#quit-stay'); await wait(200); s = await st(p);
+    ok(!s.quit && s.phase === 'place', `${tag}: Seguir jugando vuelve a la colocación`);
+    await placeAll(p); await p.click('#ready'); await waitAttack(p);
+    await clickCell(p, 3, 3); await waitAttack(p, 25000);
+    const t1 = (await st(p)).turnNo;
+    // batalla: Menú (con el HUD abierto), Esc y atrás del navegador piden confirmación
+    if (!(await p.isVisible('#back'))) await p.click('#hud-pill'); await wait(200);
+    await p.click('#back'); await wait(250);
+    ok((await st(p)).quit && (await st(p)).turnNo === t1, `${tag}: Menú en batalla pregunta sin tocar la partida`);
+    if (tag === 'mobile') await shot(p, 'quit-confirm-battle-mobile');
+    await p.keyboard.press('Escape'); await wait(150);
+    ok(!(await st(p)).quit && (await st(p)).phase === 'attack', `${tag}: Esc cierra el diálogo`);
+    await p.keyboard.press('Escape'); await wait(150);
+    ok((await st(p)).quit, `${tag}: Esc en partida abre la confirmación`);
+    await p.click('#quit-stay'); await wait(150);
+    await p.goBack().catch(() => {}); await wait(400);
+    ok((await st(p)).quit && (await st(p)).phase === 'attack', `${tag}: atrás del navegador también pregunta`);
+    await p.click('#quit-leave'); await wait(300);
+    ok(await p.isVisible('#menu') && (await st(p)).phase === 'menu', `${tag}: Abandonar vuelve al menú`);
+    // rival abandona en PvP: gana por abandono
+    ok(clean(log).length === 0, `${tag}: consola limpia ${JSON.stringify(clean(log))}`);
     await p.context().close();
   }
+  const { page: q } = await newGame(VPS.mobile, { map: 'nahuel', terrain: 'agua', rules: null });
+  await placeAll(q); await q.click('#ready'); await waitAttack(q);
+  await q.evaluate(() => window.__parquesInject({ t: 'bye' })); await wait(500);
+  ok(await q.isVisible('#end') && /abandonó/.test(await q.textContent('#end-note')), 'PvP: el rival que abandona da la victoria con aviso');
+  await q.context().close();
+}
+
+async function suiteLand() {
+  console.log('SIN BARCOS EN TIERRA');
+  // todas las máscaras y posiciones al azar (también el autocompletado): barcos en agua, tanques en tierra
+  const bad = await (async () => {
+    const g = await mk(b, { viewport: VPS.desktop }); await g.page.goto(BASE); await g.page.waitForSelector('#start');
+    const r = await g.page.evaluate(() => {
+      const C = window.ParquesCore || window.C; if (!C || !C.placeRandom) return 'sin core';
+      let bad = 0, n = 0;
+      for (const m of Object.keys(C.BOARDS)) for (const t of ['agua', 'tierra', 'mixto']) for (let c = 0; c < 5; c++) for (const sd of 'ab') for (let i = 0; i < 12; i++) {
+        const f = C.placeRandom(t, Math.random, m, c + sd);
+        f.forEach((u) => C.cellsOf(u).forEach((q) => { n++; if ((u.kind === 'barco') === C.isLand(t, m, c + sd, q.x, q.y)) bad++; }));
+      }
+      return { bad, n };
+    });
+    await g.ctx.close(); return r;
+  })();
+  ok(bad && bad.bad === 0, `máscaras: 0 celdas de unidad en terreno equivocado (${JSON.stringify(bad)})`);
+  for (const [map, tag] of [['nahuel', 'mobile'], ['iguazu', 'mobile'], ['glaciares', 'desktop']]) {
+    const g = await mk(b, { viewport: VPS[tag], ctx: tag === 'mobile' ? { hasTouch: true, isMobile: true } : {} });
+    const { page: p, log } = g;
+    await p.goto(BASE); await p.waitForSelector('#start');
+    await setup(p, { map, terrain: 'agua', rules: null }); await p.click('#start');
+    await p.waitForFunction(() => window.__parquesState().phase === 'place', null, { timeout: 20000 }); await wait(200);
+    let s = await st(p);
+    if (!s.land.length) { ok(true, `${map}: tablero ${s.board} sin tierra (nada que probar)`); await g.ctx.close(); continue; }
+    // tocar tierra: la unidad no puede quedar válida sobre tierra y ✓ no la deja
+    const landSet = new Set(s.land.map(([x, y]) => x + ',' + y));
+    let tried = 0, rejected = 0, placedOnLand = 0, shotTaken = false;
+    for (const [x, y] of s.land.slice(0, 40).filter((_, i) => i % 4 === 0)) {
+      const c = await cellXY(p, x, y); if (tag === 'mobile') await p.touchscreen.tap(c.x, c.y); else await p.mouse.click(c.x, c.y); await wait(120);
+      const pend = (await st(p)).place.pending; if (!pend) continue;
+      tried++;
+      const size = (await st(p)).units.find((u) => u.name === pend.name).size;
+      const cells = Array.from({ length: size }, (_, i) => pend.h ? (pend.x + i) + ',' + pend.y : pend.x + ',' + (pend.y + i));
+      const onLand = cells.some((k) => landSet.has(k));
+      if (onLand) {
+        ok(!pend.ok && await p.isDisabled('#pc-ok'), `${map}: barco sobre tierra en (${pend.x},${pend.y}) queda en rojo y ✓ deshabilitado`);
+        if (!shotTaken && tag === 'mobile') { await shot(p, `land-rejected-${map}-mobile`); shotTaken = true; }
+        await p.keyboard.press('Enter'); await wait(120);
+        const after = await st(p);
+        if (after.units.some((u) => !u.lifted && C_on(u, landSet))) placedOnLand++;
+        rejected++;
+      }
+      if ((await st(p)).place.pending) { /* soltar: lo deja el próximo toque */ }
+    }
+    ok(tried > 0, `${map}: se probaron ${tried} toques sobre tierra; el barco se corre solo al agua o queda en rojo (${rejected} en rojo)`);
+    // arrastrar a tierra a propósito: queda en rojo, ✓ no anda y Enter avisa «Ahí hay tierra»
+    let pend = (await st(p)).place.pending;
+    for (let i = 0; i < 30 && !(pend && pend.ok); i++) { const c = await cellXY(p, 9 - (i % 4), 2 + ((i * 3) % 15)); await p.mouse.click(c.x, c.y); await wait(100); pend = (await st(p)).place.pending; }
+    const deep = s.land.slice().sort((a, b2) => (b2[1] === a[1] ? a[0] - b2[0] : 0))[Math.floor(s.land.length / 2)];
+    if (pend && deep) {
+      const a = await cellXY(p, pend.x, pend.y), z = await cellXY(p, deep[0], deep[1]);
+      await p.mouse.move(a.x, a.y); await p.mouse.down(); await p.mouse.move(z.x, z.y, { steps: 6 }); await wait(150);
+      await p.mouse.up(); await wait(200);
+      const pr = (await st(p)).place.pending;
+      if (pr && !pr.ok) {
+        await p.keyboard.press('Enter'); await wait(200);
+        const s2 = await st(p);
+        ok(s2.place.unplaced === s.place.unplaced && /tierra/i.test(s2.place.msg), `${map}: soltado en tierra queda en rojo; Enter no lo fija y avisa: "${s2.place.msg.slice(0, 60)}"`);
+        if (tag === 'mobile' && map === 'nahuel') await shot(p, 'land-rejected-mobile');
+      } else ok(true, `${map}: al soltar en tierra se acomodó solo en el agua (${JSON.stringify(pr)})`);
+    }
+    ok(placedOnLand === 0, `${map}: ningún barco quedó fijado en tierra`);
+    await placeAll(p); s = await st(p);
+    ok(s.units.every((u) => !C_on(u, landSet)), `${map}: flota completa, toda en agua`);
+    ok(clean(log).length === 0, `${map}: consola limpia ${JSON.stringify(clean(log))}`);
+    await g.ctx.close();
+  }
+}
+function C_on(u, landSet) {
+  for (let i = 0; i < u.size; i++) { const k = u.horizontal ? (u.x + i) + ',' + u.y : u.x + ',' + (u.y + i); if (landSet.has(k)) return true; }
+  return false;
 }
 
 async function suitePvc() {
@@ -244,6 +378,7 @@ async function suiteModes() {
     await shot(q, `battle-reloaded-${tag}`);
     // sin desafío del día: las reglas elegidas mandan siempre
     await q.evaluate(() => document.getElementById('back').click()); await wait(300);
+    if (await q.isVisible('#quit-leave')) { await q.click('#quit-leave'); await wait(300); }
     ok(!(await q.$('#daily')) && !/Desafío del día/i.test(await q.textContent('body')), `${tag}: no queda rastro del desafío del día en el menú`);
     await q.click('#rules [data-rules=clasico]'); await q.click('#start'); await q.waitForFunction(() => window.__parquesState().phase === 'place');
     ok((await st(q)).rules === 'clasico', `${tag}: tras una partida Reloaded, elegir Clásico juega Clásico`);
@@ -388,7 +523,7 @@ async function suiteRecap() {
   }));
 }
 
-const suites = { geo: suiteGeo, modes: suiteModes, place: suitePlace, hud: suiteHud, touch: suiteTouch, ai: suiteAi, tuto: suiteTuto, pvc: suitePvc, recap: suiteRecap, pvp: suitePvp };
+const suites = { quit: suiteQuit, land: suiteLand, geo: suiteGeo, modes: suiteModes, place: suitePlace, hud: suiteHud, touch: suiteTouch, ai: suiteAi, tuto: suiteTuto, pvc: suitePvc, recap: suiteRecap, pvp: suitePvp };
 for (const k of which === 'all' ? Object.keys(suites) : which.split(',')) await suites[k]();
 await b.close();
 console.log(fails.length ? `\n${fails.length} FALLAS` : '\nTODO OK', '· capturas en', OUT);
