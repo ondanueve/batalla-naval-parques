@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Tableros geográficos contiguos: para cada parque y terreno, una franja real norte-sur partida en dos
-rectángulos pegados (Argentina al sur, el invasor al norte). Baja las imágenes de Sentinel-2 cloudless
-(EOX, capa 2016, CC BY 4.0), calcula la máscara agua/tierra por celda para el modo mixto con los
-polígonos de agua de OpenStreetMap (© colaboradores de OpenStreetMap, ODbL) y escribe
-maps/<parque>-<terreno>-<encuadre><a|b>.jpg + tools/geo/boards.json.
+"""Sectores geográficos contiguos: cada parque es UNA grilla real de cols × rows sectores pegados
+(cada sector es un rectángulo de w × 2w km, 10 × 20 celdas, norte arriba). En cada partida cada jugador
+recibe un sector distinto y todos los elegidos forman un bloque conexo (nunca se pisan).
+Baja las imágenes de Sentinel-2 cloudless (EOX, capa 2016, CC BY 4.0), calcula la máscara agua/tierra
+por celda con los polígonos de agua de OpenStreetMap (© colaboradores de OpenStreetMap, ODbL) o con el
+color de la imagen (lagos glaciarios), verifica que la flota entera entre en cada sector con la regla
+libre (cada pieza entera sobre agua = barco, entera sobre tierra = tanque) y escribe
+maps/<parque>-s<NN>.jpg + tools/geo/boards.json + la tabla BOARDS de core.js.
 Uso: python3 tools/geo/build.py [--preview]"""
 import json, math, os, sys, io, urllib.request, urllib.parse
 from PIL import Image, ImageDraw
@@ -11,8 +14,7 @@ from PIL import Image, ImageDraw
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 W, H = 10, 20            # celdas por tablero
 PX = 48                  # px por celda en el jpg (480×960)
-CROPS = 5
-# franja de cada encuadre: centro de la franja (lat, lng), ancho en km (cada tablero es ancho × 2·ancho)
+# grilla de cada parque: centro (lat, lng), ancho w de cada sector en km (cada sector es w × 2w), cols × rows
 ZONES = json.load(open(os.path.join(os.path.dirname(__file__), 'zones.json')))
 LAYER = {'default': 's2cloudless'}
 # de dónde sale la máscara agua/tierra: OSM (por defecto) o el color de la imagen (lagos glaciarios)
@@ -126,68 +128,95 @@ def osm_mask(osm, bb):
         rows.append(row)
     return rows
 
+FLEET = [5, 4, 3, 3, 2]   # tamaños fijos (iguales para todos)
+
+def fits(mask):
+    """¿Entra la flota completa sin pisarse, cada pieza entera sobre un solo medio? (backtracking)"""
+    taken = [[False] * W for _ in range(H)]
+    def opts(size):
+        out = []
+        for hz in (True, False):
+            for y in range(H - (0 if hz else size - 1)):
+                for x in range(W - (size - 1 if hz else 0)):
+                    cells = [(x + i, y) if hz else (x, y + i) for i in range(size)]
+                    if len(set(mask[cy][cx] for cx, cy in cells)) == 1:
+                        out.append(cells)
+        return out
+    pre = {s: opts(s) for s in set(FLEET)}
+    def rec(i):
+        if i == len(FLEET):
+            return True
+        for cells in pre[FLEET[i]]:
+            if any(taken[cy][cx] for cx, cy in cells):
+                continue
+            for cx, cy in cells: taken[cy][cx] = True
+            if rec(i + 1): return True
+            for cx, cy in cells: taken[cy][cx] = False
+        return False
+    return rec(0)
+
 def main():
     out = {}
     prev = '--preview' in sys.argv
     sheets = []
-    for park, terrains in ZONES.items():
-        out[park] = {}
-        # un solo pedido a OSM por parque (la unión de todas sus franjas)
-        allb = [bbox(z['lat'] + (k - 2) * z.get('dlat', 0), z['lng'] + (k - 2) * z.get('dlng', 0), z['w'], 4 * z['w']) for z in terrains.values() for k in range(CROPS)]
-        osm = None if ZONES_MASK.get(park) == 'color' else overpass([min(b[0] for b in allb) - 0.01, min(b[1] for b in allb) - 0.01, max(b[2] for b in allb) + 0.01, max(b[3] for b in allb) + 0.01])
-        for terrain, z in terrains.items():
-            out[park][terrain] = []
-            for k in range(CROPS):
-                lat = z['lat'] + (k - 2) * z.get('dlat', 0)
-                lng = z['lng'] + (k - 2) * z.get('dlng', 0)
-                wkm = z['w']
-                full = bbox(lat, lng, wkm, 4 * wkm)          # franja completa (los dos tableros)
-                img = fetch(full, W * PX, 2 * H * PX, z.get('layer', LAYER['default']))
-                north, south = img.crop((0, 0, W * PX, H * PX)), img.crop((0, H * PX, W * PX, 2 * H * PX))
-                midlat = (full[1] + full[3]) / 2
-                boards = {'a': (south, [full[0], full[1], full[2], midlat]), 'b': (north, [full[0], midlat, full[2], full[3]])}
-                rec = {'center': [round(lat, 5), round(lng, 5)], 'km': [wkm, 4 * wkm], 'bbox': [round(v, 5) for v in full]}
-                for side, (im, bb) in boards.items():
-                    name = '%s-%s-%d%s.jpg' % (park, terrain, k, side)
-                    if not prev:
-                        im.save(os.path.join(ROOT, 'maps', name), quality=82, optimize=True, progressive=True)
-                    rec[side] = {'bbox': [round(v, 5) for v in bb], 'mask': (osm_mask(osm, bb) if osm else color_mask(im)) if terrain == 'mixto' else None}
-                out[park][terrain].append(rec)
-                if terrain == 'mixto' or prev:
-                    sh = img.copy(); d = ImageDraw.Draw(sh, 'RGBA')
-                    for side, yoff in (('b', 0), ('a', H * PX)):
-                        m = rec[side]['mask']
-                        if m:
-                            for y in range(H):
-                                for x in range(W):
-                                    if m[y][x] == 'W':
-                                        d.rectangle((x * PX, yoff + y * PX, (x + 1) * PX, yoff + (y + 1) * PX), fill=(0, 120, 255, 70))
-                    d.line((0, H * PX, W * PX, H * PX), fill=(255, 255, 0, 255), width=4)
-                    sheets.append(sh.resize((120, 480)))
+    for park, z in ZONES.items():
+        cols, rows, wkm = z['cols'], z['rows'], z['w']
+        dlat = 2 * wkm / 111.32
+        dlng = wkm / (111.32 * math.cos(math.radians(z['lat'])))
+        west = z['lng'] - cols * dlng / 2
+        north = z['lat'] + rows * dlat / 2
+        full = [west, north - rows * dlat, west + cols * dlng, north]
+        osm = None if ZONES_MASK.get(park) == 'color' else overpass([full[0] - 0.01, full[1] - 0.01, full[2] + 0.01, full[3] + 0.01])
+        tiles = []
+        for r in range(rows):
+            for c in range(cols):
+                bb = [west + c * dlng, north - (r + 1) * dlat, west + (c + 1) * dlng, north - r * dlat]
+                im = fetch(bb, W * PX, H * PX, z.get('layer', LAYER['default']))
+                k = r * cols + c
+                if not prev:
+                    im.save(os.path.join(ROOT, 'maps', '%s-s%02d.jpg' % (park, k)), quality=80, optimize=True, progressive=True)
+                mask = osm_mask(osm, bb) if osm else color_mask(im)
+                ok = fits(mask)
+                tiles.append({'bbox': [round(v, 5) for v in bb], 'mask': mask, 'ok': ok})
+                sh = im.copy(); d = ImageDraw.Draw(sh, 'RGBA')
+                for y in range(H):
+                    for x in range(W):
+                        if mask[y][x] == 'W':
+                            d.rectangle((x * PX, y * PX, (x + 1) * PX, (y + 1) * PX), fill=(0, 120, 255, 70))
+                if not ok:
+                    d.line((0, 0, W * PX, H * PX), fill=(255, 0, 0, 255), width=12)
+                d.rectangle((0, 0, W * PX - 1, H * PX - 1), outline=(255, 255, 0, 255), width=3)
+                sheets.append((park, r, c, cols, sh.resize((120, 240))))
+        wet = [sum(row.count('W') for row in t['mask']) / (W * H) for t in tiles]
+        print(park, 'sectores', len(tiles), 'viables', sum(t['ok'] for t in tiles), 'agua %', [round(100 * v) for v in wet])
+        out[park] = {'center': [round(z['lat'], 5), round(z['lng'], 5)], 'km': [round(cols * wkm, 3), round(rows * 2 * wkm, 3)],
+                     'cols': cols, 'rows': rows, 'bbox': [round(v, 5) for v in full], 'tiles': tiles}
     json.dump(out, open(os.path.join(os.path.dirname(__file__), 'boards.json'), 'w'), indent=1)
     if not prev:
         core = os.path.join(ROOT, 'core.js')
         src = open(core).read()
         i, j = src.index('/* BOARDS:BEGIN */'), src.index('/* BOARDS:END */')
         lines = ['/* BOARDS:BEGIN */', '  const BOARDS = {']
-        for park, ts in out.items():
-            lines.append('    %s: {' % park)
-            for terrain, zs in ts.items():
-                lines.append('      %s: [' % terrain)
-                for z in zs:
-                    lines.append('        ' + json.dumps({'center': z['center'], 'km': z['km'], 'a': z['a'], 'b': z['b']}, separators=(',', ':')) + ',')
-                lines.append('      ],')
-            lines.append('    },')
+        for park, g in out.items():
+            lines.append('    %s: { center: %s, km: %s, cols: %d, rows: %d, bbox: %s, tiles: [' % (park, json.dumps(g['center']), json.dumps(g['km']), g['cols'], g['rows'], json.dumps(g['bbox'])))
+            for t in g['tiles']:
+                lines.append('      ' + json.dumps(t, separators=(',', ':')) + ',')
+            lines.append('    ] },')
         lines.append('  };')
         lines.append('  ')
         open(core, 'w').write(src[:i] + '\n'.join(lines) + src[j:])
-    if sheets:
-        cols = 15
-        rows_n = (len(sheets) + cols - 1) // cols
-        S = Image.new('RGB', (cols * 124, rows_n * 484), 'black')
-        for i, s in enumerate(sheets):
-            S.paste(s, ((i % cols) * 124, (i // cols) * 484))
-        S.save('/workspace/geo-cache/sheet.jpg', quality=85)
+    # hoja de control: cada parque como su grilla real (azul = agua, rojo = sector descartado)
+    parks = list(out.keys())
+    wmax = max(out[p]['cols'] for p in parks) * 124
+    hs = [out[p]['rows'] * 244 + 10 for p in parks]
+    S = Image.new('RGB', (wmax, sum(hs)), 'black')
+    yo = 0
+    for p, hh in zip(parks, hs):
+        for (pk, r, c, cols, sh) in sheets:
+            if pk == p: S.paste(sh, (c * 124, yo + r * 244))
+        yo += hh
+    os.makedirs('/workspace/geo-cache', exist_ok=True)
+    S.save('/workspace/geo-cache/sheet.jpg', quality=85)
     print('ok')
 
 if __name__ == '__main__':
