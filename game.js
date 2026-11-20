@@ -180,10 +180,10 @@
   };
   // [título, texto, botón (null = avanza cuando hacés la acción)]
   const TUTO_CLASSIC = {
-    0: ["1 DE 4 · UBICÁ TU FLOTA", "Tocá el agua donde va el barco. Arrastralo para moverlo, tocalo o ⟳ para girarlo y ✓ para dejarlo. En tierra no entra.", null],
+    0: ["1 DE 4 · UBICÁ TU FLOTA", "Tocá el mapa donde va cada pieza: en el agua es barco, en tierra es tanque. Arrastrala, ⟳ la gira y ✓ la deja. No puede cruzar la costa.", null],
     1: ["2 DE 4 · A LA GUERRA", "Flota lista. Tocá «Estoy listo».", null],
     2: ["3 DE 4 · DISPARÁ", "Tocá una celda del mapa enemigo. No sabés dónde están: probá.", null],
-    3: ["4 DE 4 · RESULTADO", "Agua: no había nada. Fuego: le diste. Hundido: cayó el barco entero. Después tira el rival.", "Siguiente"],
+    3: ["4 DE 4 · RESULTADO", "Agua: no había nada. Fuego: le diste. Hundido: cayó la pieza entera. Después tira el rival.", "Siguiente"],
     4: ["¡LISTO!", "Gana quien hunda primero toda la flota enemiga.", "Entendido"]
   };
   let tutoKind = "clasico";
