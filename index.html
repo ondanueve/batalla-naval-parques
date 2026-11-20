@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&family=Press+Start+2P&display=swap" rel="stylesheet">
   <script src="vendor/peerjs.min.js"></script>
 </head>
-<body data-map="nahuel" data-terrain="agua">
+<body data-map="nahuel" data-terrain="mixto">
   <div id="intro" class="hidden" role="dialog" aria-label="Introducción">
     <button type="button" id="intro-skip" class="intro-skip">Saltar</button>
     <div class="intro-art" aria-hidden="true"></div>
@@ -18,7 +18,7 @@
       <h1>PARQUES<br>EN GUERRA</h1>
       <p class="l1">Argentina guarda sus parques nacionales.</p>
       <p class="l2">Un invasor quiere tomarlos. Tu flota está escondida en el mapa.</p>
-      <p class="l3">Cada turno: disparás ya o te desarrollás para después.</p>
+      <p class="l3">Un disparo por turno. Gana la última flota en pie.</p>
       <button type="button" id="intro-go" class="go">Tocar para empezar</button>
     </div>
   </div>
@@ -49,15 +49,6 @@
           <a id="map-geo" class="geo-link" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps">Ver el sector en Google Maps ↗</a>
           <p id="map-credit" class="map-credit">Imágenes: <a href="https://s2maps.eu" target="_blank" rel="noopener noreferrer">Sentinel-2 cloudless</a> de EOX (CC BY 4.0, datos Copernicus Sentinel 2016) · agua: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a></p>
         </div>
-        <div class="block">
-          <h2>Terreno</h2>
-          <div class="row" id="terrains">
-            <button type="button" class="seg selected" data-terrain="agua">Agua</button>
-            <button type="button" class="seg" data-terrain="tierra">Tierra</button>
-            <button type="button" class="seg" data-terrain="mixto">Mixto</button>
-          </div>
-          <p class="hint" id="terrain-hint">Solo barcos, sobre agua. Tienen que entrar enteros y sin pisarse.</p>
-        </div>
         <div class="block" id="rules-block">
           <h2>Reglas</h2>
           <div class="row" id="rules" role="group" aria-label="Reglas">
@@ -71,7 +62,9 @@
           <div class="row" id="modes">
             <button type="button" class="seg selected" data-mode="pvc">Contra la máquina</button>
             <button type="button" class="seg" data-mode="pvp">Invitar a alguien</button>
+            <button type="button" class="seg" data-mode="ffa">Todos contra todos</button>
           </div>
+          <p class="hint" id="mode-hint"></p>
         </div>
         <div class="block" id="ai-block">
           <h2>Máquina</h2>
@@ -81,13 +74,13 @@
           </div>
           <p class="hint" id="ai-hint"></p>
         </div>
-        <div class="block">
+        <div class="block" id="nations-block">
           <h2>Invasor</h2>
           <div class="row" id="nations"></div>
         </div>
         <ol class="steps">
-          <li>Grilla 10×20. Colocás tu flota unidad por unidad: tocá donde va, arrastrala, tocala para girarla y ✓ para dejarla. Tenés 60 segundos y lo que falte se completa al azar. Estoy listo la cierra; en PvP arranca cuando los dos marcan, o al llegar a 0.</li>
-          <li>Agua: barcos. Tierra: tanques. Mixto: cada uno en lo suyo. Si se pisan o se salen, quedan en rojo y no se apoyan.</li>
+          <li>Grilla 10×20 sobre un sector real del parque. Colocás tu flota pieza por pieza: tocá donde va, arrastrala, tocala para girarla y ✓ para dejarla. Tenés 60 segundos y lo que falte se completa al azar.</li>
+          <li>En el agua es un barco, en tierra un tanque. Nunca cruzando la costa.</li>
           <li data-rules="clasico">Clásico: un disparo por turno, alternado. Nada se mueve y no se repite una celda. Gana quien hunda toda la flota enemiga.</li>
           <li data-rules="reloaded">Cada turno elegís: <b>Disparar</b> (daño ahora) o <b>Maniobrar</b> (mover, vigilar, reparar o apuntar: no hace daño, pero rinde después). Es el dilema de ganar material o desarrollarse, como en el ajedrez.</li>
           <li data-rules="reloaded">Ves en vivo solo las zonas que vigilás o tus torres. Del resto te queda el mapa explorado: lo último que supiste, que puede estar viejo. Los tesoros del mapa se cobran moviendo una unidad encima.</li>
@@ -97,6 +90,26 @@
       <footer class="dock">
         <button type="button" class="go" id="start">Entrar al parque</button>
         <button type="button" class="linklike" id="how">¿Cómo se juega? · Tutorial</button>
+      </footer>
+    </section>
+
+    <section id="lobby" class="screen hidden" aria-label="Sala de la batalla">
+      <header class="lobby-head">
+        <h1>TODOS CONTRA TODOS</h1>
+        <p id="lobby-sub"></p>
+      </header>
+      <div class="scroll">
+        <ol id="seats"></ol>
+        <button type="button" id="seat-add" class="linklike">+ Sumar un lugar</button>
+        <div id="lobby-link" class="hidden">
+          <input id="lobby-url" readonly aria-label="Enlace de la sala">
+          <button type="button" id="lobby-copy">Copiar</button>
+        </div>
+        <p id="lobby-note" class="hint" role="status"></p>
+      </div>
+      <footer class="dock">
+        <button type="button" class="go" id="lobby-go">Empezar</button>
+        <button type="button" class="linklike" id="lobby-back">Volver</button>
       </footer>
     </section>
 
@@ -117,6 +130,7 @@
             <div><b id="st-turns">0</b><small>Maniobras</small></div>
             <div><b id="st-time">×0</b><small>Mejor racha</small></div>
           </div>
+          <ol id="ffa-rank" class="hidden" aria-label="Posiciones"></ol>
           <section id="recap" class="hidden" aria-label="Resumen de la partida">
             <div class="recap-head"><b>Jugada a jugada</b><span class="recap-key"><span><i class="k-shot"></i>disparo</span> <span><i class="k-miss"></i>agua</span> <span class="rk-rl"><i class="k-chg"></i>cargado</span> <span class="rk-rl"><i class="k-man"></i>maniobra</span></span></div>
             <div id="recap-chart" role="img"></div>
@@ -131,6 +145,12 @@
           </div>
           <p id="end-note" role="status"></p>
         </div>
+      </div>
+      <div id="ffa-strip" class="hidden" role="group" aria-label="Rivales">
+        <span id="ffa-turn"></span>
+        <div id="ffa-chips"></div>
+        <button type="button" id="ffa-more" aria-label="Ver nombres" title="Ver nombres">▾</button>
+        <a id="ffa-geo" href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer">Google Maps ↗</a>
       </div>
       <div id="hud-top" class="ov">
         <button type="button" id="hud-pill" class="hidden" aria-expanded="false" aria-label="Mostrar u ocultar el detalle"><i class="dot"></i><span id="pill-turn"></span><em id="pill-war"></em><small id="pill-next"></small><strong id="pill-hp"></strong><b class="chev">▾</b></button>
@@ -187,16 +207,27 @@
         <div class="tools" id="tools" role="group" aria-label="Preparación">
           <button type="button" id="rotate" class="hidden">Rotar</button>
         </div>
-        <div id="dialogue">Elegí parque, terreno e invasor.</div>
+        <div id="dialogue">Elegí parque e invasor.</div>
         <button type="button" id="back">Menú</button>
       </div>
       <div id="place-msg" class="hidden" role="status" aria-live="polite"><b></b><small></small></div>
       <button type="button" id="ready" class="hidden">Estoy listo</button>
+      <button type="button" id="place-menu" aria-label="Menú">Menú</button>
       <div id="place-ctl" class="hidden" role="group" aria-label="Unidad pendiente"><button type="button" id="pc-rot" aria-label="Girar (R)" title="Girar (R)">⟳</button><button type="button" id="pc-ok" aria-label="Confirmar (Enter)" title="Confirmar (Enter)">✓</button></div>
       <aside id="log" class="ov" aria-label="Crónica de la batalla"><h3>Crónica</h3><ol id="log-list"></ol></aside>
     </section>
   </div>
   <div id="hurt"></div>
+  <div id="quit" class="hidden" role="dialog" aria-modal="true" aria-labelledby="quit-title">
+    <div class="quit-card">
+      <h2 id="quit-title">¿Abandonar la partida?</h2>
+      <p id="quit-text">Se pierde el progreso.</p>
+      <div class="quit-actions">
+        <button type="button" class="go" id="quit-stay">Seguir jugando</button>
+        <button type="button" class="go ghostbtn" id="quit-leave">Abandonar</button>
+      </div>
+    </div>
+  </div>
   <div id="juke-panel" class="hidden" role="dialog" aria-label="Jukebox">
     <h2>JUKEBOX</h2>
     <p id="juke-title">Buscando señal…</p>

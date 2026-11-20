@@ -125,9 +125,9 @@ body[data-map="glaciares"] .hero-art {
   flex: none;
   border: 2px solid rgba(255, 255, 255, 0.4);
 }
-.banner.nahuel { background: #123 url("maps/nahuel-mixto-2a.jpg") center 42% / cover; }
-.banner.iguazu { background: #123 url("maps/iguazu-mixto-2a.jpg") center 28% / cover; }
-.banner.glaciares { background: #123 url("maps/glaciares-mixto-2b.jpg") center 30% / cover; }
+.banner.nahuel { background: #123 url("maps/nahuel-s09.jpg") center 42% / cover; }
+.banner.iguazu { background: #123 url("maps/iguazu-s08.jpg") center 28% / cover; }
+.banner.glaciares { background: #123 url("maps/glaciares-s13.jpg") center 30% / cover; }
 .seg, .nation {
   padding: 10px 8px;
   font-size: 0.95rem;
@@ -920,7 +920,7 @@ body.hud-fold.in-battle #hud-bottom { opacity: 0; visibility: hidden; }
 #hud-fold[aria-pressed="true"] { background: #fde047; color: #1f2937; }
 
 /* ===== COLOCACIÓN: sin HUD, solo un mensaje transparente ===== */
-body.placing #hud-top, body.placing #dock-btns, body.placing #hud-bottom, body.placing #log,
+body.placing #hud-top, body.placing #dock-btns, body.placing:not(.tuto-on) #hud-bottom, body.placing #log,
 body.placing #clock, body.placing #incoming, body.placing #banner { display: none !important; }
 #place-msg {
   position: absolute; z-index: 9; left: 50%; transform: translateX(-50%);
@@ -1098,6 +1098,8 @@ body.in-battle:not(.hud-open) #board-geo, body.placing #board-geo { display: non
 #recap-chart .col.on, #recap-chart .col:focus-visible { background: rgba(255, 255, 255, 0.2); outline: none; }
 #recap-chart .col.key { box-shadow: inset 0 0 0 1px rgba(253, 224, 71, 0.85); }
 #recap-chart .up, #recap-chart .dn { flex: 1; display: flex; gap: 1px; padding: 0 0.5px; }
+#recap-chart.dense { gap: 0; }
+#recap-chart.dense .up, #recap-chart.dense .dn { padding: 0; gap: 0; }
 #recap-chart .up { align-items: flex-end; }
 #recap-chart .dn { align-items: flex-start; opacity: 0.72; }
 #recap-chart .b { flex: 1; min-width: 0; height: calc(var(--h, 0.3) * 100%); border-radius: 2px; position: relative; }
@@ -1143,3 +1145,127 @@ body.ended #hud-top, body.ended #hud-bottom, body.ended #log, body.ended #hud-fo
 #recap.classic .rk-rl { display: none; }
 #recap.classic #recap-phases { display: none; }
 #recap-chart .col.lc { background: rgba(148, 163, 184, 0.07); }
+
+/* confirmación de Menú en plena partida */
+#quit {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(2, 6, 23, 0.72); backdrop-filter: blur(3px);
+  padding: 16px;
+}
+#quit.hidden { display: none; }
+#quit .quit-card {
+  width: min(340px, 100%);
+  background: #0f172a; border: 1px solid rgba(250, 204, 21, 0.35); border-radius: 14px;
+  padding: 18px 16px 14px; text-align: center; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+#quit h2 { margin: 0 0 6px; font-size: 1.05rem; color: #f8fafc; }
+#quit p { margin: 0 0 14px; color: #cbd5e1; font-size: 0.9rem; }
+#quit .quit-actions { display: flex; gap: 8px; }
+#quit .quit-actions .go { flex: 1; margin: 0; }
+
+/* tutorial durante la colocación: solo la tarjeta del paso, sobre «Estoy listo» */
+body.placing.tuto-on #hud-bottom {
+  background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+  padding: 0; bottom: calc(max(3px, env(safe-area-inset-bottom)) + 48px);
+}
+body.placing #hud-bottom > :not(#coach) { display: none !important; }
+body.placing #hud-bottom #coach { pointer-events: auto; }
+/* Menú también en la colocación: chico, arriba a la izquierda */
+#place-menu {
+  position: absolute; z-index: 9; left: 8px; bottom: calc(max(3px, env(safe-area-inset-bottom)) + 5px);
+  min-height: 30px; padding: 0 11px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.3); background: rgba(2, 6, 23, 0.45); color: #e2e8f0;
+  font-weight: 800; font-size: 0.72rem; box-shadow: none;
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+body:not(.placing) #place-menu { display: none; }
+/* celular, pantalla final: el ♪ no tapa las estadísticas */
+@media (max-width: 600px) { body.ended #dock-btns { display: none; } }
+
+/* ===== TODOS CONTRA TODOS ===== */
+#lobby {
+  overflow: hidden;
+  padding: max(12px, env(safe-area-inset-top)) 14px 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.32));
+}
+.lobby-head { flex: none; text-align: center; margin-bottom: 10px; }
+.lobby-head h1 { margin: 6px 0 6px; font-size: clamp(0.9rem, 4.2vw, 1.15rem); line-height: 1.4; color: var(--gold); text-shadow: 3px 3px 0 #000; }
+#lobby-sub { margin: 0; color: #cbd5e1; font-size: 0.85rem; }
+#seats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.seat {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 7px 8px; border-radius: 12px;
+  background: rgba(15, 23, 42, 0.72); border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.seat.you { outline: 2px solid var(--gold); }
+.seat-who { flex: 1 1 auto; min-width: 7em; font-weight: 800; font-size: 0.92rem; }
+.seat-state { color: #94a3b8; font-size: 0.75rem; }
+.seat-kind { display: inline-flex; gap: 3px; }
+.seat-kind button {
+  border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(2, 6, 23, 0.5); color: #e2e8f0;
+  border-radius: 999px; padding: 4px 8px; font-size: 0.72rem; font-weight: 800; min-height: 28px;
+}
+.seat-kind button.selected { background: var(--gold); color: #1c1917; border-color: var(--gold); }
+.seat-x { border: 0; background: none; color: #94a3b8; font-size: 1rem; min-width: 28px; min-height: 28px; }
+.seat-x:disabled { opacity: 0.25; }
+#seat-add { margin: 8px 0 4px; }
+#lobby-link { display: flex; gap: 6px; margin: 8px 0 0; }
+#lobby-link input { flex: 1; min-width: 0; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(2, 6, 23, 0.6); color: #e2e8f0; padding: 8px; font-size: 0.8rem; }
+#lobby-link button { border-radius: 10px; border: 2px solid #0b0f18; background: var(--gold); color: #1c1917; font-weight: 800; padding: 0 12px; }
+#lobby-note { margin: 8px 0 0; }
+
+/* franja de rivales: compacta (bandera + piezas en pie); ▾ muestra los nombres */
+#ffa-strip {
+  position: absolute; z-index: 10; left: 6px; right: 6px;
+  top: max(5px, env(safe-area-inset-top));
+  display: flex; align-items: center; gap: 4px;
+  pointer-events: none;
+}
+#ffa-strip > * { pointer-events: auto; }
+#ffa-turn {
+  flex: none; font-weight: 800; font-size: 0.68rem; color: #e2e8f0;
+  padding: 5px 7px; border-radius: 999px; background: rgba(2, 6, 23, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.2); white-space: nowrap;
+}
+#ffa-turn.mine { background: #16a34a; color: #f0fdf4; border-color: #4ade80; }
+#ffa-chips { flex: 1; min-width: 0; display: flex; gap: 3px; overflow-x: auto; scrollbar-width: none; }
+#ffa-chips::-webkit-scrollbar { display: none; }
+#ffa-strip.open #ffa-chips { flex-wrap: wrap; overflow: visible; }
+.fchip {
+  flex: none; display: inline-flex; align-items: center; gap: 3px;
+  min-height: 30px; padding: 0 6px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(2, 6, 23, 0.6); color: #f8fafc;
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  font-size: 0.8rem; font-weight: 800; line-height: 1;
+}
+.fchip .fn { display: none; font-size: 0.7rem; }
+#ffa-strip.open .fchip .fn { display: inline; }
+.fchip .fc { font-size: 0.72rem; color: #fde68a; }
+.fchip.on { background: rgba(245, 197, 66, 0.92); color: #1c1917; border-color: #fde047; }
+.fchip.on .fc { color: #7c2d12; }
+.fchip.turn { box-shadow: 0 0 0 2px #4ade80; }
+.fchip.out { opacity: 0.45; text-decoration: line-through; }
+.fchip.me { border-style: dashed; }
+#ffa-more {
+  flex: none; width: 28px; height: 28px; padding: 0; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(2, 6, 23, 0.6); color: #e2e8f0; font-weight: 800;
+}
+#ffa-strip.open #ffa-more { transform: rotate(180deg); }
+body.ffa #hud-pill { display: none !important; }
+body.ffa #clock { top: 44px; }
+body.ffa.placing #place-msg { top: 44px; }
+/* en todos contra todos el Menú queda siempre a mano (también en batalla), chico abajo a la izquierda */
+body.ffa:not(.ended) #place-menu { display: block; }
+body.ffa #dock-btns { top: calc(max(6px, env(safe-area-inset-top)) + 46px); }
+#ffa-rank { list-style: none; margin: 6px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 3px; max-height: 32vh; overflow: auto; }
+#ffa-rank li { padding: 4px 10px; border-radius: 8px; background: rgba(15, 23, 42, 0.55); font-weight: 800; font-size: 0.85rem; text-align: left; }
+#ffa-rank li.you { outline: 2px solid var(--gold); }
+body.ffa.in-battle:not(.ended) #hud-bottom { padding-left: 70px; }
+body.ended #ffa-strip { display: none !important; }
+#ffa-geo { display: none; }
+#ffa-strip.open { flex-wrap: wrap; }
+#ffa-strip.open #ffa-geo {
+  display: inline-block; flex-basis: 100%; text-align: right; margin-top: 2px;
+  font-size: 0.72rem; font-weight: 800; color: #bfdbfe; text-decoration: underline; text-shadow: 0 1px 3px #000;
+}

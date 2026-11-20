@@ -16,22 +16,19 @@
     iguazu: { sea: "#0f766e", deep: "#115e59", foam: "rgba(236,253,245,.55)", land: "#166534", spec: "#052e16", ice: null },
     glaciares: { sea: "#bae6fd", deep: "#7dd3fc", foam: "rgba(255,255,255,.75)", land: "#94a3b8", spec: "#e2e8f0", ice: "#f8fafc" }
   };
-  const HINTS = {
-    agua: "Solo barcos, sobre agua. Tienen que entrar enteros y sin pisarse.",
-    tierra: "Solo tanques, sobre tierra. Enteros: si se salen o se pisan, no se apoyan.",
-    mixto: "Barcos en el agua y tanques en la tierra. En rojo, esa postura no vale."
-  };
   const ISSUE_TEXT = {
     borde: "No entra: se sale del mapa. Tiene que quedar entera.",
     solape: "No entra: se pisa con otra unidad.",
     tierra: "Ahí hay tierra. Este es un barco: solo puede ir al agua.",
-    agua: "Ahí hay agua. Este es un tanque: solo puede ir a tierra."
+    agua: "Ahí hay agua. Este es un tanque: solo puede ir a tierra.",
+    costa: "No entra: cruza la costa. Toda en el agua o toda en tierra."
   };
   const ISSUE_BANNER = {
     borde: "NO ENTRA · se sale",
     solape: "NO ENTRA · se pisa",
     tierra: "NO ENTRA · solo agua",
-    agua: "NO ENTRA · solo tierra"
+    agua: "NO ENTRA · solo tierra",
+    costa: "NO ENTRA · cruza la costa"
   };
 
   const ui = {
@@ -74,17 +71,20 @@
     };
   });
 
-  const opts = { map: "nahuel", terrain: "agua", mode: "pvc", nation: "chile", crop: 0, rules: "clasico" };
+  // terreno único: cada mapa es un mapa real (agua y tierra según el lugar); no hay modos de terreno
+  const opts = { map: "nahuel", terrain: "mixto", mode: "pvc", nation: "chile", crop: 0, sectors: null, rules: "clasico" };
   // Reglas: Clásico por defecto. Se recuerda solo durante la sesión (nunca en localStorage).
   const KEY_RULES = "parques.rules";
-  try { opts.rules = C.normMode(sessionStorage.getItem(KEY_RULES)); } catch (e) { opts.rules = "clasico"; }
+  // Reloaded queda oculto (el código sigue, detrás de esta bandera) hasta que se rehaga ese modo
+  const RELOADED_ON = false;
+  try { opts.rules = RELOADED_ON ? C.normMode(sessionStorage.getItem(KEY_RULES)) : "clasico"; } catch (e) { opts.rules = "clasico"; }
   const classic = () => opts.rules === "clasico";
   const RULES_NAME = { clasico: "Clásico", reloaded: "Reloaded" };
   // link discreto al sector real del mapa (Google Maps, vista satelital, pestaña nueva)
   // un solo link por mapa: el centro de la franja que forman los dos tableros, con zoom para verlos a ambos
   function geoNow() {
     const inGame = !!match && !ui.battle.classList.contains("hidden");
-    return C.geoView(opts.map, opts.terrain, inGame ? (opts.crop || 0) : 2);
+    return C.geoView(opts.map, null, inGame ? gameSectors() : null);
   }
   function geoUrl() {
     const v = geoNow();
@@ -94,11 +94,11 @@
   function paintGeo() {
     const g = C.MAPS[opts.map] && C.MAPS[opts.map].geo;
     const v = geoNow();
-    ["map-geo", "board-geo"].forEach((id) => {
+    ["map-geo", "board-geo", "ffa-geo"].forEach((id) => {
       const a = document.getElementById(id);
       if (!a) return;
       a.href = geoUrl();
-      if (v) a.title = (g ? g.sector + " · " : "") + "los dos tableros: " + v.km[0] + " × " + v.km[1] + " km, centro " + v.lat + ", " + v.lng + " (Google Maps, pestaña nueva)";
+      if (v) a.title = (g ? g.sector + " · " : "") + v.km[0] + " × " + v.km[1] + " km, centro " + v.lat + ", " + v.lng + " (Google Maps, pestaña nueva)";
     });
     const m = document.getElementById("map-geo");
     if (m && g) m.textContent = "Ver " + g.sector + " en Google Maps ↗";
@@ -169,39 +169,58 @@
   let rematch = { me: false, them: false };
   let tuto = null; // { step, pending } while the guided tutorial is on
   let tutoForce = false;
-  const TUTO_COPY = {
+  // El tutorial enseña solo Clásico. El de Reloaded queda guardado (RELOADED_TUTO) hasta que se rehaga ese modo.
+  const RELOADED_TUTO = false;
+  const TUTO_RELOADED = {
     0: ["PREPARACIÓN", "Colocá tu flota unidad por unidad. Tocá «Estoy listo» para empezar."],
     1: ["PASO 1 DE 3 · DISPARAR", "Disparar da daño ahora. Tocá cualquier celda del mapa enemigo: no sabés dónde está nadie."],
     2: ["PASO 2 DE 3 · DESARROLLAR", "Maniobrar no hace daño, pero rinde después. Tocá «Maniobrar» y elegí «Apuntar»: el próximo disparo cae en cruz."],
     3: ["PASO 3 DE 3 · COBRAR", "Tocá «Disparar» y una celda: tu carga cae en cruz. Esa es la inversión pagando."],
-    4: ["¡LISTO!", "Disparar gana material. Maniobrar gana posición. Repetir una celda es válido: lo que ves viejo puede haber cambiado."]
+    4: ["¡LISTO!", "Disparar gana material. Maniobrar gana posición. Repetir una celda es válido: lo que ves viejo puede haber cambiado.", "Entendido"]
   };
+  // [título, texto, botón (null = avanza cuando hacés la acción)]
+  const TUTO_CLASSIC = {
+    0: ["1 DE 4 · UBICÁ TU FLOTA", "Tocá el agua donde va el barco. Arrastralo para moverlo, tocalo o ⟳ para girarlo y ✓ para dejarlo. En tierra no entra.", null],
+    1: ["2 DE 4 · A LA GUERRA", "Flota lista. Tocá «Estoy listo».", null],
+    2: ["3 DE 4 · DISPARÁ", "Tocá una celda del mapa enemigo. No sabés dónde están: probá.", null],
+    3: ["4 DE 4 · RESULTADO", "Agua: no había nada. Fuego: le diste. Hundido: cayó el barco entero. Después tira el rival.", "Siguiente"],
+    4: ["¡LISTO!", "Gana quien hunda primero toda la flota enemiga.", "Entendido"]
+  };
+  let tutoKind = "clasico";
+  function tutoCopy() { return tutoKind === "reloaded" ? TUTO_RELOADED : TUTO_CLASSIC; }
 
   function tutoSave() { store.set(KEY_TUTO, "1"); }
   function pulseOn(el, on) { if (el) el.classList.toggle("pulse", !!on); }
   function tutoRender() {
     const box = document.getElementById("coach");
     if (!box) return;
+    document.body.classList.toggle("tuto-on", !!tuto);
     if (!tuto) {
       box.classList.add("hidden");
       pulseOn(ui.ready, false);
       requestAnimationFrame(fit);
       return;
     }
-    const c = TUTO_COPY[tuto.step];
+    const c = tutoCopy()[tuto.step].slice();
+    const okBtn = document.getElementById("coach-ok");
     document.getElementById("coach-step").textContent = c[0];
     document.getElementById("coach-text").textContent = c[1];
-    document.getElementById("coach-ok").classList.toggle("hidden", tuto.step !== 4);
+    okBtn.textContent = c[2] || "Entendido";
+    okBtn.classList.toggle("hidden", !c[2]);
     document.getElementById("coach-skip").classList.toggle("hidden", tuto.step === 4);
+    box.dataset.step = String(tuto.step);
     box.classList.remove("hidden");
-    pulseOn(ui.ready, tuto.step === 0);
+    pulseOn(ui.ready, tutoKind === "clasico" ? tuto.step === 1 : tuto.step === 0);
     requestAnimationFrame(fit);
   }
   function tutoStart() {
-    if (opts.mode !== "pvc" || classic()) return;
+    if (opts.mode !== "pvc") return;
+    if (!classic() && !RELOADED_TUTO) return;
     if (store.get(KEY_TUTO) && !tutoForce) return;
     tutoForce = false;
+    tutoKind = classic() ? "clasico" : "reloaded";
     tuto = { step: 0, pending: 0 };
+    if (tutoKind === "clasico") stopClock(); // aprendiendo no hay reloj: nada se completa solo
     tutoRender();
   }
   function tutoEnd() {
@@ -210,14 +229,28 @@
     tutoSave();
     tutoRender();
   }
+  function tutoGo(step) { tuto.step = step; tuto.pending = 0; if (step === 4) tutoSave(); tutoRender(); hudDirty = true; }
+  function tutoNext() {
+    if (!tuto) return;
+    if (tuto.step >= 4) { tutoEnd(); return; }
+    tutoGo(tuto.step + 1);
+  }
   function tutoEvent(name) {
     if (!tuto) return;
+    if (tutoKind === "clasico") {
+      if (name === "placed" && tuto.step === 0) tutoGo(1);
+      else if (name === "unplaced" && tuto.step === 1) tutoGo(0);
+      else if (name === "ready" && tuto.step <= 1) tutoGo(2);
+      else if (name === "shown" && tuto.step === 2) tutoGo(3);
+      return;
+    }
     if (name === "ready" && tuto.step === 0) { tuto.step = 1; tutoRender(); }
     else if (name === "shot" && tuto.step === 1) tuto.pending = 2;
     else if (name === "man" && tuto.step === 2) tuto.pending = 3;
     else if (name === "shot" && tuto.step === 3) tuto.pending = 4;
   }
   function tutoTurn() {
+    if (tutoKind === "clasico") return;
     if (tuto && tuto.pending) {
       tuto.step = tuto.pending;
       tuto.pending = 0;
@@ -235,7 +268,7 @@
     if (document.body.classList.contains("in-battle") && text) {
       document.body.classList.add("say-on");
       clearTimeout(sayT);
-      sayT = setTimeout(() => document.body.classList.remove("say-on"), 3600);
+      sayT = setTimeout(() => document.body.classList.remove("say-on"), tuto ? 9000 : 5200);
     }
     if (logList && text && text !== lastSay && !/^(Tu turno\.|El invasor apunta|El invasor piensa|Disparo en camino|Disparar da|Esperando|Bombardeo:)/.test(text)) {
       lastSay = text;
@@ -307,24 +340,31 @@
       b.addEventListener("click", () => {
         opts[key] = b.dataset[attr];
         root.querySelectorAll("button").forEach((el) => el.classList.toggle("selected", el === b));
-        if (key === "terrain") document.getElementById("terrain-hint").textContent = HINTS[opts.terrain];
-        if (key === "map" || key === "terrain") applyTheme();
-        if (key === "map" || key === "terrain") paintGeo();
+        if (key === "map") applyTheme();
+        if (key === "map") paintGeo();
         if (key === "rules") {
           try { sessionStorage.setItem(KEY_RULES, opts.rules); } catch (e) { /* sin sesión */ }
           paintRulesMenu();
   paintGeo();
         }
-        if (key === "mode") {
-          document.getElementById("ai-block").classList.toggle("hidden", opts.mode === "pvp");
-          document.getElementById("start").textContent = opts.mode === "pvp" ? "Crear enlace" : "Entrar al parque";
-        }
+        if (key === "mode") paintModeMenu();
         blip();
       });
     });
   }
 
+  function paintModeMenu() {
+    document.getElementById("ai-block").classList.toggle("hidden", opts.mode !== "pvc");
+    const nb = document.getElementById("nations-block");
+    if (nb) nb.classList.toggle("hidden", opts.mode === "ffa");
+    document.getElementById("start").textContent = opts.mode === "pvp" ? "Crear enlace" : opts.mode === "ffa" ? "Armar la batalla" : "Entrar al parque";
+    const h = document.getElementById("mode-hint");
+    if (h) h.textContent = opts.mode === "ffa" ? "De 2 a 8, cada uno en su sector del parque. Personas con un enlace y lugares libres para la máquina." : "";
+  }
   function destroyNet() {
+    try { ffaConns.forEach((c) => { try { c.close(); } catch (e) {} }); } catch (e) {}
+    ffaConns = [];
+    clearInterval(ffaBeatId); ffaBeatId = 0;
     clearInterval(helloTimer);
     clearInterval(hereTimer);
     helloTimer = 0;
@@ -351,6 +391,17 @@
   }
 
   function showMenu() {
+    try {
+      clearTimeout(ffaTurnT); clearInterval(ffaClockId); ffaClockId = 0; clearTimeout(ffaGraceT); ffaGraceT = 0;
+      lobby = null; lobbyEl.classList.add("hidden");
+      document.getElementById("rematch").classList.remove("hidden");
+      document.getElementById("ffa-rank").classList.add("hidden");
+      document.body.classList.remove("ffa");
+      stripEl.classList.add("hidden");
+      if (opts.mode === "ffa" && !document.querySelector("#modes [data-mode=ffa].selected")) opts.mode = "pvc";
+    } catch (e) { /* antes de armar la UI */ }
+    const qb = document.getElementById("quit");
+    if (qb) qb.classList.add("hidden");
     stopClock();
     destroyNet();
     match = null;
@@ -369,6 +420,7 @@
   }
 
   function showBattle() {
+    try { if (!(history.state && history.state.parques)) history.pushState({ parques: 1 }, ""); } catch (e) { /* sin historial */ }
     ui.menu.classList.add("hidden");
     ui.battle.classList.remove("hidden");
     ui.end.classList.add("hidden");
@@ -453,6 +505,10 @@
   function viewKind() {
     if (viewOverride) return viewOverride;
     if (!match) return "local";
+    if (match.ffa) {
+      if (match.phase === "place" || match.phase === "sealed" || match.phase === "lobby") return "local";
+      return match.ffa.view === match.ffa.me ? "local" : "remote";
+    }
     if (match.phase === "place" || match.phase === "sealed" || match.phase === "defend" || match.phase === "lobby") return "local";
     if (match.phase === "attack" && (sel.mode === "move" || sel.mode === "repair")) return "local";
     return "remote";
@@ -487,15 +543,21 @@
   function paintPips(localView) {
     ui.pips.replaceChildren();
     const fleet = localView ? match.local : null;
-    const list = fleet || C.FLEETS[opts.terrain] || [];
+    const list = fleet || C.FLEET.map((f, id) => ({ id, size: f.size, name: "" }));
     list.forEach((s) => {
       const el = document.createElement("span");
       el.className = "pip";
       let dead = false;
+      let label = s.name + " " + s.size;
       if (fleet) dead = C.shipStatus(s, match.hitsOnLocal).sunk;
-      else dead = match.wrecks.some((w) => w.name === s.name);
+      else {
+        // del rival solo se sabe el tamaño; el nombre aparece cuando se hunde
+        const w = match.wrecks.find((q) => q.uid === s.id);
+        dead = !!w;
+        label = w ? w.name + " " + s.size : "■".repeat(s.size);
+      }
       if (dead) el.classList.add("dead");
-      el.textContent = s.name + " " + s.size;
+      el.textContent = label;
       ui.pips.appendChild(el);
     });
   }
@@ -593,8 +655,8 @@
       b.setAttribute("aria-pressed", (sel.mode === "move" && k === "mover") || (sel.mode === "watch" && k === "reconocer") || (sel.mode === "repair" && k === "reparar") ? "true" : "false");
       b.title = states[k].ok ? "" : states[k].why;
     });
-    pulseOn(ui.dev, !!tuto && tuto.step === 2 && !sel.open && myTurn);
-    pulseOn(ui.shoot, !!tuto && (tuto.step === 3 || tuto.step === 1) && myTurn && !sel.open);
+    pulseOn(ui.dev, !!tuto && tutoKind === "reloaded" && tuto.step === 2 && !sel.open && myTurn);
+    pulseOn(ui.shoot, !!tuto && tutoKind === "reloaded" && (tuto.step === 3 || tuto.step === 1) && myTurn && !sel.open);
     const ap = ui.manu.querySelector('[data-man="apuntar"]');
     pulseOn(ap, !!tuto && tuto.step === 2 && open);
   }
@@ -651,15 +713,16 @@
     let sub = "";
     if (placing) {
       const next = match.local.find((u) => u.unplaced);
-      const secs = Math.max(0, clockLeft) + " s";
+      const secs = tuto ? "sin apuro" : Math.max(0, clockLeft) + " s";
       const cur = hand ? hand.ship : next;
+      const curName = hand ? C.unitName(hand.ship.id, preview && hand.set ? handKind(preview.x, preview.y) : (hand.ship.unplaced ? null : hand.ship.kind)) : (cur ? cur.name : "");
       if (hand && !next) {
-        main = "Ajustá tu " + cur.name.toLowerCase() + ".";
+        main = "Ajustá tu " + curName.toLowerCase() + ".";
         sub = placeNote || (secs + " · arrastrá · tocá para girar · ✓");
       } else if (next) {
-        main = "Posicioná tu " + cur.name.toLowerCase() + ".";
+        main = "Posicioná tu " + curName.toLowerCase() + ".";
         sub = placeNote || (secs + " · " + (hand && hand.set ? "arrastrá · tocá para girar · ✓" : "tocá dónde va"));
-        if (tuto && tuto.step === 0 && !placeNote) sub = "Tutorial: " + sub;
+        
       } else {
         main = "Flota lista.";
         sub = placeNote || (secs + " · tocá una unidad para ajustarla, o Estoy listo");
@@ -668,7 +731,7 @@
       main = "Flota cerrada.";
       sub = "Esperando al rival…";
     }
-    if (sub && (placing || waitingReady)) sub = RULES_NAME[opts.rules] + " · " + sub;
+    if (sub && (placing || waitingReady) && RELOADED_ON) sub = RULES_NAME[opts.rules] + " · " + sub;
     const a = box.firstElementChild, b = box.lastElementChild;
     if (a.textContent !== main) a.textContent = main;
     if (b.textContent !== sub) b.textContent = sub;
@@ -690,9 +753,16 @@
     return { x: g.padL + x * g.cellW, y: g.padT + y * g.cellH };
   }
 
-  // cada lado juega en su propio rectángulo geográfico (contiguos: Argentina al sur, el invasor al norte)
-  function myBoard() { return C.boardKey(opts.crop, match ? match.role : "arg"); }
-  function foeBoard() { return C.boardKey(opts.crop, match ? C.other(match.role) : "inv"); }
+  // cada jugador juega en su propio sector geográfico (todos pegados, nunca el mismo)
+  function gameSectors() { return (match && match.ffa) ? match.ffa.seats.map((q) => q.tile) : opts.sectors; }
+  function myBoard() {
+    if (match && match.ffa) return match.ffa.seats[match.ffa.me].tile;
+    return C.boardKey(opts.sectors || [0, 1], match ? match.role : "arg");
+  }
+  function foeBoard() {
+    if (match && match.ffa) { const t = match.ffa.seats[match.ffa.target]; return t ? t.tile : myBoard(); }
+    return C.boardKey(opts.sectors || [0, 1], match ? C.other(match.role) : "inv");
+  }
   function viewBoard() { return viewKind() === "local" ? myBoard() : foeBoard(); }
   function isLand(x, y) {
     return C.isLand(opts.terrain, opts.map, viewBoard(), x, y);
@@ -705,7 +775,7 @@
   }
 
   function parkImage() {
-    const id = (opts.map || "nahuel") + "-" + (opts.terrain || "agua") + "-" + viewBoard();
+    const id = (opts.map || "nahuel") + "-s" + String(viewBoard()).padStart(2, "0");
     if (!mapImgs[id]) {
       const img = new Image();
       img.src = asset("maps/" + id + ".jpg");
@@ -822,7 +892,7 @@
         SPARKLES.forEach((sp) => {
           const cx = Math.min(C.W - 1, Math.floor(sp.x * C.W));
           const cy = Math.min(C.H - 1, Math.floor(sp.y * C.H));
-          if (isLand(cx, cy) && opts.terrain !== "agua") return;
+          if (isLand(cx, cy)) return;
           const a = Math.max(0, Math.sin(time / 600 + sp.ph));
           if (a < 0.2) return;
           ctx.globalAlpha = a * 0.55;
@@ -859,7 +929,7 @@
       ctx.fillRect(g.padL, g.padT, gw, gh);
     }
 
-    if (opts.terrain === "mixto") {
+    {
       for (let y = 0; y < C.H; y++) {
         for (let x = 0; x < C.W; x++) {
           const p = cellPx(g, x, y);
@@ -935,7 +1005,7 @@
     const cx = p.x + g.cellW * 0.5, cy = p.y + g.cellH * 0.5;
     const apc = /blindado/i.test(name || "");
     const heavy = /pesado/i.test(name || "");
-    const light = /ligero/i.test(name || "");
+    const light = /ligero|jeep/i.test(name || "");
     ctx.save();
     // sombra proyectada (siempre hacia abajo a la derecha de la pantalla)
     ctx.save();
@@ -1187,7 +1257,7 @@
   function drawHull(g, ship, alpha, color) {
     ctx.save();
     ctx.globalAlpha = alpha;
-    const kind = ship.kind || (opts.terrain === "tierra" ? "tanque" : "barco");
+    const kind = ship.kind || "barco";
     // material realista; el color propio de la unidad queda como franja de identificación
     const base = color || (kind === "tanque" ? "#5f6b3a" : "#7b8794");
     const accent = color ? shade(color, 0.25) : (ship.color || "#e5e7eb");
@@ -1204,37 +1274,64 @@
   }
 
   // frontera: el borde del tablero pegado al otro rectángulo (sutil; el sur es Argentina, el norte el invasor)
+  // fronteras: los bordes del sector pegados a otro sector en juego (dorado punteado, sutil)
+  function sectorOwner(k) {
+    if (match && match.ffa) { const q = match.ffa.seats.find((t) => t.tile === k); return q || null; }
+    return null;
+  }
   function drawFrontier(g, gw, gh) {
     if (!match) return;
-    const south = /a$/.test(viewBoard());
-    const y = south ? g.padT : g.padT + gh;
-    const depth = g.cellH * 0.55;
-    ctx.save();
-    const lg = ctx.createLinearGradient(0, y, 0, south ? y + depth : y - depth);
-    lg.addColorStop(0, "rgba(253, 224, 71, .28)");
-    lg.addColorStop(1, "rgba(253, 224, 71, 0)");
-    ctx.fillStyle = lg;
-    ctx.fillRect(g.padL, south ? y : y - depth, gw, depth);
-    ctx.strokeStyle = "rgba(253, 224, 71, .6)";
-    ctx.lineWidth = Math.max(1.5, 1.6 * g.dpr);
-    ctx.setLineDash([6 * g.dpr, 5 * g.dpr]);
-    ctx.beginPath(); ctx.moveTo(g.padL, y + (south ? 1 : -1)); ctx.lineTo(g.padL + gw, y + (south ? 1 : -1)); ctx.stroke();
-    ctx.setLineDash([]);
+    const here = viewBoard();
+    const inPlay = gameSectors() || [];
+    const edges = C.tileNeighbors(opts.map, here).filter((nb) => inPlay.includes(nb.k));
+    if (!edges.length) return;
+    const depth = Math.min(g.cellW, g.cellH) * 0.55;
     const mine = viewKind() === "local";
-    // girado: el borde norte/sur queda a izquierda/derecha de la pantalla; la etiqueta va abajo, sobre el dock
-    const arrow = rotView ? (south ? "◀ " : "▶ ") : (south ? "▲ " : "▼ ");
-    const label = arrow + (mine ? "frontera: allá está el enemigo" : "frontera: allá está tu territorio");
-    ctx.font = "800 " + Math.max(9, Math.floor(Math.min(g.cellW, g.cellH) * 0.24)) + "px Nunito, sans-serif";
-    ctx.textAlign = rotView ? (south ? "left" : "right") : "right";
-    ctx.textBaseline = rotView ? "bottom" : (south ? "top" : "bottom");
-    ctx.globalAlpha = 0.72;
-    ctx.lineWidth = 3 * g.dpr;
-    ctx.strokeStyle = "rgba(2,6,23,.75)";
-    const lx = rotView ? g.padL + 6 * g.dpr : g.padL + gw - 6 * g.dpr, ly = south ? y + 4 * g.dpr : y - 4 * g.dpr;
-    ctx.strokeText(label, lx, ly);
-    ctx.fillStyle = "#fde68a";
-    ctx.fillText(label, lx, ly);
-    ctx.restore();
+    edges.forEach((nb, idx) => {
+      ctx.save();
+      const horiz = nb.dir === "n" || nb.dir === "s";
+      const x0 = nb.dir === "e" ? g.padL + gw : g.padL;
+      const y0 = nb.dir === "s" ? g.padT + gh : g.padT;
+      const inward = nb.dir === "n" || nb.dir === "o" ? 1 : -1;
+      const lg = horiz ? ctx.createLinearGradient(0, y0, 0, y0 + inward * depth) : ctx.createLinearGradient(x0, 0, x0 + inward * depth, 0);
+      lg.addColorStop(0, "rgba(253, 224, 71, .26)");
+      lg.addColorStop(1, "rgba(253, 224, 71, 0)");
+      ctx.fillStyle = lg;
+      if (horiz) ctx.fillRect(g.padL, inward > 0 ? y0 : y0 - depth, gw, depth);
+      else ctx.fillRect(inward > 0 ? x0 : x0 - depth, g.padT, depth, gh);
+      ctx.strokeStyle = "rgba(253, 224, 71, .6)";
+      ctx.lineWidth = Math.max(1.5, 1.6 * g.dpr);
+      ctx.setLineDash([6 * g.dpr, 5 * g.dpr]);
+      ctx.beginPath();
+      if (horiz) { ctx.moveTo(g.padL, y0 + inward); ctx.lineTo(g.padL + gw, y0 + inward); }
+      else { ctx.moveTo(x0 + inward, g.padT); ctx.lineTo(x0 + inward, g.padT + gh); }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // etiqueta: en todos contra todos, la bandera del vecino; en 1 vs 1, dónde está el otro
+      const owner = sectorOwner(nb.k);
+      const label = owner ? owner.flag : (mine ? "frontera: allá está el enemigo" : "frontera: allá está tu territorio");
+      const fs = Math.max(9, Math.floor(Math.min(g.cellW, g.cellH) * (owner ? 0.42 : 0.24)));
+      ctx.font = "800 " + fs + "px Nunito, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.globalAlpha = 0.8;
+      const lx = horiz ? (owner ? g.padL + gw * (0.5 + 0.18 * (idx % 2 ? 1 : -1) * 0) : g.padL + gw - (owner ? gw / 2 : 0)) : x0 + inward * fs * 0.8;
+      const ly = horiz ? y0 + inward * fs * 0.8 : g.padT + gh / 2;
+      if (!owner) { ctx.textAlign = horiz ? "right" : "center"; }
+      const tx = !owner && horiz ? g.padL + gw - 6 * g.dpr : lx;
+      ctx.lineWidth = 3 * g.dpr;
+      ctx.strokeStyle = "rgba(2,6,23,.75)";
+      let px = tx, py = ly;
+      if (!owner && !horiz) { // borde este/oeste: el texto va a lo largo del borde, para que no se corte
+        ctx.translate(x0 + inward * fs * 0.8, g.padT + gh / 2);
+        ctx.rotate(inward > 0 ? -Math.PI / 2 : Math.PI / 2);
+        ctx.textAlign = "center"; px = 0; py = 0;
+      }
+      if (!owner) ctx.strokeText(label, px, py);
+      ctx.fillStyle = "#fde68a";
+      ctx.fillText(label, px, py);
+      ctx.restore();
+    });
   }
 
   function drawIllegalMarks(g, ship) {
@@ -1664,19 +1761,17 @@
         }
       }
       if (hand && preview) {
+        const med = handKind(preview.x, preview.y);
         const ghost = {
           x: preview.x,
           y: preview.y,
           size: hand.ship.size,
           horizontal: hand.horizontal,
-          kind: hand.ship.kind,
-          name: hand.ship.name,
+          kind: med || "barco",
+          name: C.unitName(hand.ship.id, med),
           color: hand.ship.color
         };
-        const issue = C.placeIssue(
-          match.local, ghost.x, ghost.y, ghost.size, ghost.horizontal,
-          hand.ship.id, ghost.kind, opts.terrain, opts.map, myBoard()
-        );
+        const issue = handIssue(ghost.x, ghost.y);
         drawHull(g, ghost, 0.92, issue ? "#f87171" : "#4ade80");
         if (issue) {
           drawIllegalMarks(g, ghost);
@@ -1686,13 +1781,12 @@
       match.wrecks.forEach((w) => {
         if (!w.cells || !w.cells.length) return;
         const horizontal = w.cells.length < 2 || w.cells[0].y === w.cells[1].y;
-        const spec = (C.FLEETS[opts.terrain] || []).find((s) => s.name === w.name);
         const unit = {
           x: Math.min.apply(null, w.cells.map((c) => c.x)),
           y: Math.min.apply(null, w.cells.map((c) => c.y)),
           size: w.cells.length,
           horizontal,
-          kind: spec ? spec.kind : "barco",
+          kind: w.kind || "barco",
           name: w.name,
           color: "#64748b"
         };
@@ -2075,7 +2169,7 @@
         trauma = Math.min(1, trauma + 0.12);
         if (jk && jk.sfx.hit) jk.sfx.hit();
       }, 260 + i * 140));
-      const land = opts.terrain === "tierra" || (opts.terrain === "mixto" && isLand(cells[0].x, cells[0].y));
+      const land = isLand(cells[0].x, cells[0].y);
       setTimeout(() => cells.forEach((c, i) => rings.push({ x: c.x, y: c.y, life: 1, color: land ? "#d6d3d1" : "#7dd3fc", size: 3.2, w: 2, delay: i * 0.08 })), 300 + cells.length * 140);
     }
     shake(incoming, 1);
@@ -2160,7 +2254,7 @@
     }
     if (blocked && incoming) return "Tu blindaje absorbió el impacto.";
     if (wreck.length && !incoming) return "Ahí solo queda un naufragio.";
-    return pat + (incoming ? "El disparo cayó al vacío." : "Agua. Si él se movió, tus marcas viejas ya no valen.");
+    return pat + (incoming ? "El disparo cayó al vacío." : classic() ? "Agua." : "Agua. Si él se movió, tus marcas viejas ya no valen.");
   }
 
   function fxAgain(x, y, text) {
@@ -2310,13 +2404,10 @@
   }
 
   function freshMatch(role) {
-    let local;
-    try { local = C.placeRandom(opts.terrain, Math.random, opts.map, myBoard()); }
-    catch (e) { local = C.placeRandom(opts.terrain, Math.random, opts.map, myBoard()); }
+    const local = C.placeRandom(null, Math.random, opts.map, myBoard());
     let remote = null;
     if (role === "arg" && opts.mode === "pvc") {
-      try { remote = C.placeRandom(opts.terrain, Math.random, opts.map, foeBoard()); }
-      catch (e) { remote = C.placeRandom(opts.terrain, Math.random, opts.map, foeBoard()); }
+      remote = C.placeRandom(null, Math.random, opts.map, foeBoard());
     }
     match = {
       role,
@@ -2340,7 +2431,7 @@
       chron: []
     };
     // Colocación unidad por unidad: nada arranca puesto (las unidades "levantadas" no cuentan en el tablero).
-    local.forEach((u) => { u.unplaced = true; u.lifted = true; u.horizontal = true; });
+    local.forEach((u) => { u.unplaced = true; u.lifted = true; u.horizontal = true; u.kind = null; u.name = C.unitName(u.id, null); });
     match.side = C.newSide(local);
     match.hitsOnLocal = match.side.hits;
     match.meP = { side: match.side, know: match.know, pers: null, consec: 0 };
@@ -2449,7 +2540,7 @@
     stopClock();
     hudDirty = true;
     const seed = opts.mode === "pvp" ? ((opts.seed >>> 0) || 1) : Math.floor(Math.random() * 4294967296);
-    match.shared = C.newShared(seed, opts.terrain, opts.map, opts.crop, opts.rules);
+    match.shared = C.newShared(seed, opts.terrain, opts.map, opts.sectors, opts.rules);
     match.lastLevel = 0;
     if (opts.mode !== "pvp") {
       const pers = C.PERSONALITIES[Math.floor(Math.random() * C.PERSONALITIES.length)];
@@ -2488,6 +2579,7 @@
     if (!match || battleStarted || sealed) return;
     if (match.phase !== "place") return;
     sealFleet();
+    if (match.ffa) { ffaSealed(); return; }
     if (opts.mode !== "pvp") {
       beginBattle();
       return;
@@ -2500,6 +2592,13 @@
   function onClockDone() {
     if (!match || battleStarted) return;
     if (match.phase !== "place" && match.phase !== "sealed") return;
+    if (match.ffa) {
+      const was = match.phase === "sealed";
+      sealFleet();
+      if (!was) ffaSealed();
+      else if (match.ffa.host) ffaCheckReady();
+      return;
+    }
     sealFleet();
     if (opts.mode !== "pvp") {
       beginBattle();
@@ -2535,12 +2634,12 @@
   function autoFill() {
     if (!match) return;
     if (!match.local.some((u) => u.unplaced)) return;
-    if (!C.placeRemaining(match.local, opts.terrain, Math.random, opts.map, myBoard())) {
+    if (!C.placeRemaining(match.local, null, Math.random, opts.map, myBoard())) {
       // hueco imposible con lo que puso el jugador: se rearma todo al azar
-      const fresh = C.placeRandom(opts.terrain, Math.random, opts.map, myBoard());
+      const fresh = C.placeRandom(null, Math.random, opts.map, myBoard());
       match.local.forEach((u) => {
         const f = fresh.find((q) => q.id === u.id);
-        u.x = f.x; u.y = f.y; u.horizontal = f.horizontal; u.unplaced = false; u.lifted = false;
+        u.x = f.x; u.y = f.y; u.horizontal = f.horizontal; u.unplaced = false; u.lifted = false; u.kind = f.kind; u.name = f.name;
       });
     }
     hand = null;
@@ -2551,7 +2650,7 @@
   function flashNote(text) {
     placeNote = text;
     clearTimeout(placeNoteT);
-    placeNoteT = setTimeout(() => { placeNote = ""; hudDirty = true; }, 2200);
+    placeNoteT = setTimeout(() => { placeNote = ""; hudDirty = true; }, tuto ? 6000 : 3800);
     hudDirty = true;
   }
   // la posición válida más cercana (para girar o soltar cerca del borde sin pelearse con la grilla)
@@ -2599,13 +2698,21 @@
     }, 460);
   }
 
+  // regla libre: la pieza es barco si queda entera en el agua y tanque si queda entera en tierra
   function handIssue(x, y) {
     if (!hand || !match) return "borde";
     return C.placeIssue(
       match.local, x, y, hand.ship.size, hand.horizontal,
-      hand.ship.id, hand.ship.kind, opts.terrain, opts.map, myBoard()
+      hand.ship.id, "auto", opts.terrain, opts.map, myBoard()
     );
   }
+  function handKind(x, y) {
+    if (!hand) return "";
+    const cells = C.cellsOf({ x, y, size: hand.ship.size, horizontal: hand.horizontal });
+    if (cells.some((c) => !C.inBounds(c.x, c.y))) return "";
+    return C.mediumOf(opts.map, myBoard(), cells);
+  }
+  function setDown(ship) { C.settleKind(ship, opts.map, myBoard()); }
 
   function settleHand() {
     if (!hand) return;
@@ -2615,6 +2722,7 @@
       hand.ship.horizontal = hand.horizontal;
       hand.ship.lifted = false;
       hand.ship.unplaced = false;
+      setDown(hand.ship);
       hand = null;
       preview = null;
       return;
@@ -2637,8 +2745,7 @@
     preview = { x: ship.x, y: ship.y };
     lastPlaceTag = "";
     hudDirty = true;
-    const where = ship.kind === "tanque" ? "Solo tierra." : "Solo agua.";
-    say(ship.name + " en tus manos: arrastrá, tocala para girar y ✓ para dejarla. " + where);
+    say(ship.name + " en tus manos: arrastrá, tocala para girar y ✓ para dejarla.");
   }
   function onGhost(cell) {
     if (!hand || !hand.set || !preview || !cell) return false;
@@ -2710,6 +2817,7 @@
     hand.ship.horizontal = hand.horizontal;
     hand.ship.lifted = false;
     hand.ship.unplaced = false;
+    setDown(hand.ship);
     hand = null;
     preview = null;
     placeNote = "";
@@ -2717,7 +2825,7 @@
     blip();
     if (quiet) return;
     nextHand();
-    if (placedAll()) say("Flota completa. Tocá una unidad para ajustarla o Estoy listo.");
+    if (placedAll()) { say("Flota completa. Tocá una unidad para ajustarla o Estoy listo."); tutoEvent("placed"); }
     else say(wasNew ? "Lista. Ahora la que sigue." : "Reacomodada.");
   }
 
@@ -2924,6 +3032,7 @@
 
   async function takeAction(act) {
     if (!match || match.phase !== "attack") return;
+    if (match.ffa) { if (act.t === "shot") return ffaMyShot(act.cell); return; }
     const m = match;
     const me = match.meP;
     const sh = match.shared;
@@ -3086,6 +3195,7 @@
       rememberRemote(out.results);
       tutoEvent("shot");
       await playResults(out.results, false, out.pattern);
+      tutoEvent("shown");
       return;
     }
     match.stats.man++;
@@ -3190,7 +3300,8 @@
     results.forEach((r) => {
       if (r.kind === "sunk") {
         const cells = r.cells && r.cells.length ? r.cells : [{ x: r.x, y: r.y }];
-        if (!match.wrecks.some((w) => w.name === r.ship)) match.wrecks.push({ name: r.ship, cells, t0: performance.now() });
+        const uid = typeof r.uid === "number" ? r.uid : null;
+        if (!match.wrecks.some((w) => (uid != null ? w.uid === uid : w.name === r.ship))) match.wrecks.push({ name: String(r.ship || "").slice(0, 30), uid, kind: r.med === "tanque" ? "tanque" : "barco", cells, t0: performance.now() });
       }
     });
     hudDirty = true;
@@ -3200,7 +3311,7 @@
   function parkName() { return (C.MAPS[opts.map] || {}).name || "el parque"; }
   function challengeUrl() {
     const path = location.pathname.endsWith("/") ? location.pathname : location.pathname.replace(/[^/]*$/, "");
-    return location.origin + path + "?parque=" + opts.map + "&terreno=" + opts.terrain + "&invasor=" + opts.nation + (classic() ? "" : "&reglas=reloaded");
+    return location.origin + path + "?parque=" + opts.map + "&invasor=" + opts.nation + (classic() ? "" : "&reglas=reloaded");
   }
   function accuracyOf(stt) { return stt.cells ? Math.round((stt.hits / stt.cells) * 100) : 0; }
   function fmtTime(ms) {
@@ -3289,6 +3400,7 @@
     const R = Math.max(1, d.rounds);
     chart.textContent = "";
     chart.style.setProperty("--cols", String(R));
+    chart.classList.toggle("dense", R > 40); // partidas largas (Clásico): sin huecos, para que las barras se vean
     const byRound = [];
     for (let r = 1; r <= R; r++) byRound.push({ r, me: [], foe: [], lvl: 0 });
     d.ch.forEach((e) => { const c = byRound[e.rd - 1]; if (!c) return; (e.me ? c.me : c.foe).push(e); c.lvl = Math.max(c.lvl, e.lvl); });
@@ -3354,7 +3466,7 @@
       const foeShots = d.foe.filter((e) => e.t === "shot").length, foeHits = d.foe.filter((e) => e.t === "shot" && e.dmg).length;
       if (foeShots) ctip += " " + foeName + ": " + foeHits + " de " + foeShots + ".";
       ctip += win ? " Ganaste la puntería." : pct < 30 ? " Tras un impacto, rematá alrededor antes de abrir fuego en otro lado." : " Estuvo parejo: buscá el patrón en los barcos que quedan.";
-      ctip += " En Reloaded se suma maniobrar: apuntar, vigilar, mover o reparar en vez de tirar.";
+      if (RELOADED_ON) ctip += " En Reloaded se suma maniobrar: apuntar, vigilar, mover o reparar en vez de tirar.";
       document.getElementById("recap-tip").textContent = ctip;
       box.classList.remove("hidden");
       return;
@@ -3420,9 +3532,9 @@
     if (match.role === "arg" && rematch.them) hostRematchGo();
   }
   function hostRematchGo() {
-    opts.crop = Math.floor(Math.random() * 5);
+    opts.sectors = C.pickSectors(opts.map, 2);
     opts.seed = Math.floor(Math.random() * 4294967296);
-    send({ t: "rematchgo", crop: opts.crop, seed: opts.seed, rules: opts.rules });
+    send({ t: "rematchgo", sectors: opts.sectors, seed: opts.seed, rules: opts.rules });
     startRematch();
   }
   async function onShare() {
@@ -3480,8 +3592,17 @@
 
   function onData(msg) {
     if (!msg || !msg.t) return;
+    if (typeof msg.t === "string" && msg.t.indexOf("f-") === 0) { ffaGuestData(msg); return; }
     if (msg.t !== "here" && msg.t !== "hello") netNote("<", msg);
     if (msg.t === "clash") { showMenu(); noteMenu(typeof msg.why === "string" ? msg.why.slice(0, 160) : "El rival canceló: las reglas no coinciden."); return; }
+    if (msg.t === "bye") {
+      if (!match || match.phase === "end") return;
+      if (match.phase === "lobby" || match.phase === "place") { showMenu(); noteMenu("Tu rival abandonó la partida."); return; }
+      finish(true);
+      document.getElementById("end-note").textContent = "Tu rival abandonó la partida.";
+      document.getElementById("rematch").disabled = true;
+      return;
+    }
     if (msg.t === "here") {
       sendHello();
       if (match && match.phase === "lobby") beginPlace();
@@ -3493,12 +3614,12 @@
       clearInterval(hereTimer);
       hereTimer = 0;
       if (C.MAPS[msg.map]) opts.map = msg.map;
-      if (C.FLEETS[msg.terrain]) opts.terrain = msg.terrain;
       if (C.NATIONS[msg.nation]) opts.nation = msg.nation;
-      if (typeof msg.crop === "number") opts.crop = ((msg.crop % 5) + 5) % 5;
+      if (!C.validSectors(opts.map, msg.sectors, 2)) { rulesClash("La sala viene de otra versión del juego. Pedile al rival que recargue la página."); return; }
+      opts.sectors = msg.sectors.slice();
       if (typeof msg.seed === "number") opts.seed = msg.seed >>> 0;
       // las reglas las elige quien arma la sala; una sala sin reglas es de otra versión del juego
-      if (!C.MODES.includes(msg.rules)) { rulesClash("La sala viene de otra versión del juego. Pedile al rival que recargue la página."); return; }
+      if (!C.MODES.includes(msg.rules) || (!RELOADED_ON && msg.rules !== "clasico")) { rulesClash("La sala viene de otra versión del juego. Pedile al rival que recargue la página."); return; }
       opts.rules = msg.rules;
       applyRules();
       paintGeo();
@@ -3534,7 +3655,7 @@
     if (msg.t === "rematchgo") {
       if (match && match.phase === "end" && rematch.me && match.role === "inv") {
         if (msg.rules !== opts.rules) { rulesClash("La revancha usa otras reglas. Volvé al menú y armen otra sala."); return; }
-        if (typeof msg.crop === "number") opts.crop = ((msg.crop % 5) + 5) % 5;
+        if (C.validSectors(opts.map, msg.sectors, 2)) opts.sectors = msg.sectors.slice();
         if (typeof msg.seed === "number") opts.seed = msg.seed >>> 0;
         startRematch();
       }
@@ -3551,6 +3672,8 @@
     conn = c;
     c.on("data", onData);
     c.on("close", () => {
+      if (match && match.ffa) { ffaHostLost(); return; }
+      if (lobby && !lobby.host) { showMenu(); noteMenu("El anfitrión cerró la sala."); return; }
       if (match && match.phase !== "end") say("Se cortó la conexión.");
       if (match && match.phase === "end") {
         document.getElementById("end-note").textContent = "El rival salió de la sala.";
@@ -3598,7 +3721,7 @@
   }
 
   function sendHello() {
-    send({ t: "hello", map: opts.map, terrain: opts.terrain, nation: opts.nation, crop: opts.crop || 0, seed: opts.seed >>> 0, rules: opts.rules });
+    send({ t: "hello", map: opts.map, nation: opts.nation, sectors: opts.sectors, seed: opts.seed >>> 0, rules: opts.rules });
   }
 
   function noteMenu(text) {
@@ -3713,11 +3836,12 @@
     const j = juke();
     if (j) j.start();
     blip();
-    opts.crop = Math.floor(Math.random() * 5);
+    opts.sectors = C.pickSectors(opts.map, 2);
     opts.seed = Math.floor(Math.random() * 4294967296);
     applyRules();
     applyTheme();
     paintGeo();
+    if (opts.mode === "ffa") { ffaOpenLobby(); return; }
     if (opts.mode === "pvp") {
       if (!window.Peer) {
         say("Falta la conexión en línea. Recargá e intentá de nuevo.");
@@ -3834,10 +3958,11 @@
   }
 
   selectGroup(document.getElementById("maps"), "map", "map");
-  selectGroup(document.getElementById("terrains"), "terrain", "terrain");
   selectGroup(document.getElementById("modes"), "mode", "mode");
   selectGroup(document.getElementById("rules"), "rules", "rules");
   function paintRulesMenu() {
+    const rb = document.getElementById("rules-block");
+    if (rb) rb.classList.toggle("hidden", !RELOADED_ON);
     document.querySelectorAll("#rules button").forEach((b) => b.classList.toggle("selected", b.dataset.rules === opts.rules));
     const h = document.getElementById("rules-hint");
     if (h) h.textContent = classic() ? "La batalla naval de siempre: un tiro por turno, nada se mueve. Gana quien hunda toda la flota."
@@ -3861,7 +3986,65 @@
     });
   });
   document.getElementById("ai-hint").textContent = AI_HINT[opts.ai];
-  document.getElementById("back").addEventListener("click", showMenu);
+  // Menú en plena partida: primero confirmar (nada se destruye sin «Abandonar»)
+  const quitBox = document.getElementById("quit");
+  let quitPaused = 0;
+  function inGame() { return !!match && match.phase !== "end" && ui.battle && !ui.battle.classList.contains("hidden"); }
+  function quitOpen() { return !!quitBox && !quitBox.classList.contains("hidden"); }
+  function askQuit() {
+    if (!inGame()) { showMenu(); return; }
+    if (quitOpen()) return;
+    const pvp = opts.mode === "pvp";
+    const ffa = !!match.ffa;
+    document.getElementById("quit-text").textContent = ffa
+      ? (match.ffa.host ? (match.ffa.seats.some((q) => q.kind === "human") ? "Sos el anfitrión: la batalla termina para todos." : "Se pierde el progreso.") : "Tu lugar lo toma la máquina.")
+      : pvp
+        ? "Se pierde el progreso y tu rival gana por abandono."
+        : "Se pierde el progreso.";
+    // contra la máquina el reloj se congela mientras decidís
+    if (!pvp && !ffa && clockId) { clearInterval(clockId); clockId = 0; quitPaused = clockLeft; }
+    quitBox.classList.remove("hidden");
+    document.getElementById("quit-stay").focus();
+    blip();
+  }
+  function closeQuit() {
+    if (!quitOpen()) return;
+    quitBox.classList.add("hidden");
+    if (quitPaused && match && match.phase !== "end") {
+      const left = quitPaused;
+      startClock();
+      clockLeft = left;
+      ui.clock.textContent = String(left);
+    }
+    quitPaused = 0;
+  }
+  function leaveGame() {
+    quitPaused = 0;
+    quitBox.classList.add("hidden");
+    if (match && match.ffa) {
+      if (match.ffa.host) ffaBroadcast({ t: "f-end", winner: -1, ranks: [], why: "El anfitrión abandonó. Batalla terminada." });
+      else send({ t: "f-bye" });
+      setTimeout(showMenu, 150);
+      return;
+    }
+    if (opts.mode === "pvp") send({ t: "bye" });
+    setTimeout(showMenu, opts.mode === "pvp" ? 120 : 0);
+  }
+  document.getElementById("back").addEventListener("click", askQuit);
+  document.getElementById("place-menu").addEventListener("click", askQuit);
+  document.getElementById("quit-stay").addEventListener("click", () => { closeQuit(); blip(); });
+  document.getElementById("quit-leave").addEventListener("click", leaveGame);
+  quitBox.addEventListener("click", (e) => { if (e.target === quitBox) closeQuit(); });
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (quitOpen()) { e.preventDefault(); closeQuit(); return; }
+    if (ui.battle && !ui.battle.classList.contains("hidden")) { e.preventDefault(); askQuit(); }
+  });
+  // botón «atrás» del navegador o del celular: misma confirmación
+  window.addEventListener("popstate", () => {
+    if (inGame()) { try { history.pushState({ parques: 1 }, ""); } catch (e) { /* sin historial */ } askQuit(); }
+    else if (ui.battle && !ui.battle.classList.contains("hidden")) showMenu();
+  });
   document.getElementById("again").addEventListener("click", showMenu);
   document.getElementById("rematch").addEventListener("click", onRematchClick);
   document.getElementById("share").addEventListener("click", onShare);
@@ -3959,12 +4142,13 @@
   });
 
   document.getElementById("coach-skip").addEventListener("click", () => { tutoEnd(); say("Tutorial salteado. Podés repetirlo desde el menú."); });
-  document.getElementById("coach-ok").addEventListener("click", () => tutoEnd());
+  document.getElementById("coach-ok").addEventListener("click", () => { tutoNext(); blip(); });
   document.getElementById("how").addEventListener("click", () => {
     const pvc = document.querySelector("#modes [data-mode=pvc]");
     if (pvc) pvc.click();
-    const rl = document.querySelector("#rules [data-rules=reloaded]");
-    if (rl && classic()) rl.click(); // el tutorial enseña Reloaded
+    // el tutorial enseña Clásico (el de Reloaded está guardado hasta que se rehaga ese modo)
+    const cl = document.querySelector("#rules [data-rules=clasico]");
+    if (cl && !classic() && !RELOADED_TUTO) cl.click();
     tutoForce = true;
     startGame();
   });
@@ -3972,16 +4156,14 @@
   function applyChallenge() {
     const q = new URLSearchParams(location.search);
     const pk = q.get("parque");
-    const tr = q.get("terreno");
     const inv = q.get("invasor");
-    if (q.get("sala") || !(pk || tr || inv)) return;
+    if (q.get("sala") || !(pk || inv)) return;
     const click = (sel) => { const el = document.querySelector(sel); if (el) el.click(); };
     if (C.MAPS[pk]) click("#maps [data-map=" + pk + "]");
-    if (C.FLEETS[tr]) click("#terrains [data-terrain=" + tr + "]");
     if (C.NATIONS[inv]) click("#nations [data-nation=" + inv + "]");
-    if (q.get("reglas") === "reloaded") click("#rules [data-rules=reloaded]");
+    if (RELOADED_ON && q.get("reglas") === "reloaded") click("#rules [data-rules=reloaded]");
     const lede = document.querySelector(".lede");
-    if (lede) lede.textContent = "Te desafiaron en " + parkName() + " (" + opts.terrain + "). ¿Aceptás?";
+    if (lede) lede.textContent = "Te desafiaron en " + parkName() + ". ¿Aceptás?";
   }
   applyChallenge();
 
@@ -4012,6 +4194,724 @@
   wireJuke();
   applyTheme();
 
+  /* =====================================================================
+     TODOS CONTRA TODOS (Clásico, 2 a 8): humanos (PeerJS, el anfitrión comparte la sala) y máquinas.
+     El anfitrión manda: guarda todas las flotas, resuelve cada tiro y reparte los turnos. Cada jugador
+     tiene su propio sector real del mapa (todos pegados, nunca el mismo). Todos ven todos los tiros.
+     ===================================================================== */
+  const FFA_NATIONS = [
+    { id: "chile", name: "Chile", flag: "🇨🇱" }, { id: "uk", name: "Reino Unido", flag: "🇬🇧" },
+    { id: "usa", name: "EE.UU.", flag: "🇺🇸" }, { id: "china", name: "China", flag: "🇨🇳" },
+    { id: "rusia", name: "Rusia", flag: "🇷🇺" }, { id: "brasil", name: "Brasil", flag: "🇧🇷" },
+    { id: "francia", name: "Francia", flag: "🇫🇷" }
+  ];
+  const FFA_TURN_S = 30;
+  const FFA_FAST = /[?&]rapido=1/.test(location.search); // QA: máquinas sin pausa
+  const lobbyEl = document.getElementById("lobby");
+  let lobby = null; // { host: bool, seats: [...], peer conns } mientras se arma la batalla
+  let ffaConns = []; // anfitrión: conexiones de los invitados
+  let ffaTurnT = 0;
+  let ffaClockId = 0;
+  // latido: un invitado que cierra la pestaña a veces no avisa (WebRTC tarda o nunca cierra el canal)
+  const BEAT_MS = 2000, BEAT_DEAD = 9000;
+  let ffaBeatId = 0, hostSeen = 0;
+  function ffaHostBeat() {
+    clearInterval(ffaBeatId);
+    ffaBeatId = setInterval(() => {
+      const now = Date.now();
+      ffaConns.slice().forEach((c) => {
+        if (now - (c._seen || now) > BEAT_DEAD) { try { c.close(); } catch (e) {} ffaConnLost(c); return; }
+        if (c.open) { try { c.send({ t: "f-ping" }); } catch (e) {} }
+      });
+    }, BEAT_MS);
+  }
+  function ffaGuestBeat() {
+    hostSeen = Date.now();
+    if (ffaBeatId) return;
+    ffaBeatId = setInterval(() => {
+      if (Date.now() - hostSeen <= BEAT_DEAD + 3000) return;
+      clearInterval(ffaBeatId); ffaBeatId = 0;
+      if (match && match.ffa) ffaHostLost();
+      else if (lobby && !lobby.host) { showMenu(); noteMenu("Se cortó la conexión con el anfitrión."); }
+    }, BEAT_MS);
+  }
+
+  function seatLabel(q, i, me) {
+    return q.flag + " " + q.name + (i === me ? " (vos)" : "");
+  }
+  function nationFor(i) { return i === 0 ? { name: "Argentina", flag: "🇦🇷" } : FFA_NATIONS[(i - 1) % FFA_NATIONS.length]; }
+
+  // ---------- sala (lobby) ----------
+  function ffaOpenLobby() {
+    lobby = { host: true, me: 0, seats: [{ kind: "me" }, { kind: "bot", ai: "normal" }, { kind: "bot", ai: "normal" }, { kind: "bot", ai: "dificil" }], url: "" };
+    ui.menu.classList.add("hidden");
+    lobbyEl.classList.remove("hidden");
+    paintLobby();
+  }
+  function lobbyMax() { return Math.max(2, C.maxPlayers(opts.map)); }
+  function lobbyPublic() {
+    return lobby.seats.map((q, i) => {
+      const n = nationFor(i);
+      return { name: n.name, flag: n.flag, kind: q.kind === "me" ? "host" : q.kind, ai: q.ai || "", on: q.kind !== "human" || !!q.conn };
+    });
+  }
+  function paintLobby() {
+    if (!lobby) return;
+    const list = document.getElementById("seats");
+    list.replaceChildren();
+    const pub = lobby.host ? lobbyPublic() : lobby.pub || [];
+    pub.forEach((q, i) => {
+      const li = document.createElement("li");
+      li.className = "seat " + q.kind + (i === lobby.me ? " you" : "");
+      const who = document.createElement("span");
+      who.className = "seat-who";
+      who.textContent = q.flag + " " + q.name + (i === lobby.me ? " · vos" : "");
+      li.appendChild(who);
+      if (lobby.host && i > 0) {
+        const seg = document.createElement("span");
+        seg.className = "seat-kind";
+        [["normal", "Máquina"], ["dificil", "Difícil"], ["human", "Persona"]].forEach(([k, t]) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.textContent = t;
+          b.dataset.kind = k;
+          const on = k === "human" ? q.kind === "human" : q.kind === "bot" && q.ai === k;
+          b.classList.toggle("selected", on);
+          b.addEventListener("click", () => {
+            const s = lobby.seats[i];
+            if (k === "human") { if (s.kind !== "human") { s.kind = "human"; s.conn = null; } }
+            else { if (s.conn) { try { s.conn.send({ t: "f-full", why: "El anfitrión cambió tu lugar por una máquina." }); s.conn.close(); } catch (e) {} } s.kind = "bot"; s.ai = k; s.conn = null; }
+            blip();
+            lobbyChanged();
+          });
+          seg.appendChild(b);
+        });
+        li.appendChild(seg);
+        const x = document.createElement("button");
+        x.type = "button";
+        x.className = "seat-x";
+        x.setAttribute("aria-label", "Quitar lugar");
+        x.textContent = "✕";
+        x.disabled = lobby.seats.length <= 2;
+        x.addEventListener("click", () => {
+          const s = lobby.seats[i];
+          if (s.conn) { try { s.conn.send({ t: "f-full", why: "El anfitrión quitó tu lugar." }); s.conn.close(); } catch (e) {} }
+          lobby.seats.splice(i, 1);
+          blip();
+          lobbyChanged();
+        });
+        li.appendChild(x);
+      } else if (i > 0 || !lobby.host) {
+        const st = document.createElement("small");
+        st.className = "seat-state";
+        st.textContent = q.kind === "human" ? (q.on ? "persona" : "esperando…") : q.kind === "host" ? "anfitrión" : q.ai === "dificil" ? "máquina difícil" : "máquina";
+        li.appendChild(st);
+      }
+      if (q.kind === "human" && lobby.host) {
+        const st = document.createElement("small");
+        st.className = "seat-state";
+        st.textContent = q.on ? "conectado" : "esperando…";
+        li.appendChild(st);
+      }
+      list.appendChild(li);
+    });
+    const max = lobbyMax();
+    const add = document.getElementById("seat-add");
+    add.classList.toggle("hidden", !lobby.host);
+    add.disabled = !lobby.host || lobby.seats.length >= max;
+    document.getElementById("lobby-sub").textContent = parkName() + " · " + pub.length + " jugadores · máximo " + max;
+    const wantsLink = lobby.host && lobby.seats.some((s) => s.kind === "human");
+    document.getElementById("lobby-link").classList.toggle("hidden", !wantsLink);
+    document.getElementById("lobby-url").value = lobby.url || "Abriendo sala…";
+    const go = document.getElementById("lobby-go");
+    go.classList.toggle("hidden", !lobby.host);
+    const waiting = lobby.host ? lobby.seats.filter((s) => s.kind === "human" && !s.conn).length : 0;
+    go.textContent = waiting ? "Empezar (faltan " + waiting + ": juega la máquina)" : "Empezar";
+    document.getElementById("lobby-note").textContent = lobby.host
+      ? (wantsLink ? "Compartí el enlace. Cada persona que entra ocupa un lugar." : "Cada lugar puede ser una máquina o una persona.")
+      : (lobby.note || "Esperando que el anfitrión empiece…");
+  }
+  function lobbyChanged() {
+    if (!lobby || !lobby.host) return;
+    if (lobby.seats.some((s) => s.kind === "human") && !peer) ffaHostPeer();
+    lobbyBroadcast();
+    paintLobby();
+  }
+  function lobbyBroadcast() {
+    const pub = lobbyPublic();
+    lobby.seats.forEach((s, i) => { if (s.conn && s.conn.open) s.conn.send({ t: "f-lobby", seats: pub, you: i, map: opts.map, v: 1 }); });
+  }
+  function ffaHostPeer() {
+    const id = "parques-" + Math.random().toString(36).slice(2, 8);
+    peer = new Peer(id, PEER_CFG);
+    peer.on("open", (pid) => { lobby && (lobby.url = inviteUrl(pid)); paintLobby(); });
+    ffaHostBeat();
+    peer.on("connection", (c) => {
+      c._seen = Date.now();
+      c.on("data", (msg) => { c._seen = Date.now(); ffaHostData(c, msg); });
+      c.on("close", () => ffaConnLost(c));
+      c.on("error", () => {});
+    });
+    peer.on("disconnected", () => { try { if (peer && !peer.destroyed) peer.reconnect(); } catch (e) {} });
+    peer.on("error", (err) => {
+      const typ = (err && err.type) || "red";
+      if (typ === "unavailable-id") { try { peer.destroy(); } catch (e) {} peer = null; ffaHostPeer(); return; }
+      if (typ === "disconnected" || typ === "network" || typ === "peer-unavailable") return;
+      if (lobby) { lobby.note = "No se pudo abrir la sala (" + typ + ")."; paintLobby(); }
+    });
+  }
+  function seatOfConn(c) { return match && match.ffa ? match.ffa.seats.findIndex((q) => q.conn === c) : lobby ? lobby.seats.findIndex((q) => q.conn === c) : -1; }
+  function ffaHostData(c, msg) {
+    if (!msg || typeof msg.t !== "string") return;
+    if (msg.t === "here") {
+      if (seatOfConn(c) >= 0) { if (lobby) lobbyBroadcast(); return; }
+      if (!lobby || match) { try { c.send({ t: "f-full", why: "La batalla ya empezó." }); } catch (e) {} return; }
+      let i = lobby.seats.findIndex((s) => s.kind === "human" && !s.conn);
+      if (i < 0 && lobby.seats.length < lobbyMax()) { lobby.seats.push({ kind: "human" }); i = lobby.seats.length - 1; }
+      if (i < 0) { try { c.send({ t: "f-full", why: "La sala está llena." }); } catch (e) {} return; }
+      lobby.seats[i].conn = c;
+      ffaConns.push(c);
+      blip();
+      lobbyBroadcast();
+      paintLobby();
+      return;
+    }
+    const f = match && match.ffa;
+    if (!f) return;
+    const i = seatOfConn(c);
+    if (i < 0) return;
+    if (msg.t === "f-fleet") lock(() => ffaGotFleet(i, msg.units));
+    else if (msg.t === "f-shot") lock(() => ffaHostShot(i, msg));
+    else if (msg.t === "f-bye") ffaSeatGone(i, true);
+  }
+  function ffaConnLost(c) {
+    ffaConns = ffaConns.filter((q) => q !== c);
+    if (lobby && !match) {
+      const s = lobby.seats.find((q) => q.conn === c);
+      if (s) { s.conn = null; lobbyBroadcast(); paintLobby(); }
+      return;
+    }
+    const i = seatOfConn(c);
+    if (i >= 0) ffaSeatGone(i, false);
+  }
+  // un humano se fue (abandonó o se cortó): lo reemplaza la máquina, la partida nunca se cuelga
+  function ffaSeatGone(i, abandoned) {
+    const f = match && match.ffa;
+    if (!f || !f.host) return;
+    const q = f.seats[i];
+    if (!q || q.kind !== "human") return;
+    try { if (q.conn) q.conn.close(); } catch (e) {}
+    q.conn = null;
+    q.kind = "bot";
+    q.ai = "normal";
+    const msg = { t: "f-left", seat: i, why: abandoned ? "abandonó" : "se desconectó" };
+    ffaBroadcast(msg);
+    lock(() => ffaOnLeft(msg));
+    if (match.phase === "place" || match.phase === "sealed") { if (!q.side) ffaGotFleet(i, null); }
+    else if (f.turn === i && !f.ended) { clearTimeout(ffaTurnT); ffaTurnT = setTimeout(() => ffaBotTurn(i), 400); }
+  }
+  async function ffaOnLeft(msg) {
+    const f = match && match.ffa;
+    if (!f) return;
+    const q = f.seats[msg.seat];
+    if (!q) return;
+    q.kind = "bot";
+    say(q.flag + " " + q.name + " " + (msg.why === "abandonó" ? "abandonó" : "se desconectó") + ": juega la máquina por él.");
+    paintStrip();
+  }
+  function ffaBroadcast(msg) {
+    const f = match && match.ffa;
+    (f ? f.seats : []).forEach((q) => { if (q.conn && q.conn.open) { try { q.conn.send(msg); } catch (e) {} } });
+  }
+
+  // ---------- invitado ----------
+  function ffaGuestData(msg) {
+    if (lobby || (match && match.ffa)) ffaGuestBeat();
+    if (msg.t === "f-ping") { send({ t: "f-pong" }); return; }
+    if (msg.t === "f-lobby") {
+      gotHello = true;
+      clearInterval(hereTimer);
+      hereTimer = 0;
+      if (C.MAPS[msg.map]) opts.map = msg.map;
+      opts.mode = "ffa";
+      lobby = { host: false, me: msg.you | 0, pub: Array.isArray(msg.seats) ? msg.seats.slice(0, 8) : [] };
+      ui.battle.classList.add("hidden");
+      ui.menu.classList.add("hidden");
+      lobbyEl.classList.remove("hidden");
+      applyTheme();
+      paintLobby();
+      return;
+    }
+    if (msg.t === "f-full") {
+      const why = typeof msg.why === "string" ? msg.why.slice(0, 120) : "La sala está llena.";
+      if (match && match.ffa) return;
+      showMenu();
+      noteMenu(why);
+      return;
+    }
+    if (msg.t === "f-start") { ffaStart(msg); return; }
+    if (!match || !match.ffa) return;
+    if (msg.t === "f-battle") lock(() => ffaOnBattle(msg));
+    else if (msg.t === "f-turn") lock(() => ffaOnTurn(msg));
+    else if (msg.t === "f-res") lock(() => ffaOnRes(msg));
+    else if (msg.t === "f-left") lock(() => ffaOnLeft(msg));
+    else if (msg.t === "f-end") lock(() => ffaOnEnd(msg));
+  }
+
+  // ---------- arranque ----------
+  function ffaHostStart() {
+    if (!lobby || !lobby.host) return;
+    const n = lobby.seats.length;
+    const sectors = C.pickSectors(opts.map, n);
+    if (!sectors) { lobby.note = "En este parque no entran " + n + " jugadores."; paintLobby(); return; }
+    // sectores al azar entre los lugares
+    for (let i = sectors.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [sectors[i], sectors[j]] = [sectors[j], sectors[i]]; }
+    const seats = lobby.seats.map((s, i) => {
+      const nat = nationFor(i);
+      const human = s.kind === "human" && s.conn && s.conn.open;
+      return { name: nat.name, flag: nat.flag, kind: s.kind === "me" ? "me" : human ? "human" : "bot", ai: s.ai || "normal", tile: sectors[i], conn: human ? s.conn : null };
+    });
+    // los lugares de persona sin nadie juegan como máquina
+    lobby.seats.forEach((s) => { if (s.kind === "human" && !(s.conn && s.conn.open) && s.conn) { try { s.conn.close(); } catch (e) {} } });
+    const seed = Math.floor(Math.random() * 4294967296);
+    const pub = seats.map((q) => ({ name: q.name, flag: q.flag, kind: q.kind === "me" ? "human" : q.kind, ai: q.ai, tile: q.tile }));
+    seats.forEach((q, i) => { if (q.conn) q.conn.send({ t: "f-start", v: 1, map: opts.map, seed, seats: pub, you: i, rules: "clasico" }); });
+    ffaStart({ map: opts.map, seed, seats: pub, you: 0, host: true, full: seats });
+  }
+  function ffaStart(msg) {
+    const host = !!msg.host;
+    if (!host) {
+      if (!C.MAPS[msg.map] || !Array.isArray(msg.seats) || msg.seats.length < 2 || msg.seats.length > 8) return;
+      opts.map = msg.map;
+      if (!C.validSectors(opts.map, msg.seats.map((q) => q && q.tile), msg.seats.length)) { showMenu(); noteMenu("La sala viene de otra versión del juego. Recargá la página."); return; }
+    }
+    opts.mode = "ffa";
+    opts.rules = "clasico";
+    const me = msg.you | 0;
+    const seats = (host ? msg.full : msg.seats).map((q, i) => ({
+      name: String(q.name || "Jugador").slice(0, 24), flag: String(q.flag || "🏳️").slice(0, 8),
+      kind: host ? q.kind : (i === me ? "me" : q.kind === "bot" ? "bot" : "human"), ai: q.ai === "dificil" ? "dificil" : "normal",
+      tile: q.tile | 0, conn: host ? q.conn || null : null,
+      know: C.newKnow(), wrecks: [], left: 17, out: false, rank: 0, side: null, fit: {}
+    }));
+    const other = seats.find((q, i) => i !== me);
+    opts.sectors = [seats[me].tile, other.tile];
+    opts.seed = msg.seed >>> 0;
+    lobby = null;
+    lobbyEl.classList.add("hidden");
+    applyRules();
+    applyTheme();
+    freshMatch("arg");
+    match.ffa = { host, me, seats, turn: -1, n: 0, target: -1, view: me, order: seats.map((_, i) => i), ended: false, alive: seats.length, place: seats.length };
+    match.remote = null;
+    seats[me].side = match.side;
+    if (host) {
+      seats.forEach((q, i) => {
+        if (q.kind === "bot") { const fl = C.placeRandom(null, Math.random, opts.map, q.tile); q.side = C.newSide(fl); q.ready = true; }
+      });
+    }
+    showBattle();
+    beginPlace();
+    say("Todos contra todos · " + seats.length + " jugadores. 60 segundos para tu flota; empieza cuando todos están listos.");
+    paintGeo();
+    paintStrip();
+  }
+  // mi flota quedó cerrada (Estoy listo o reloj en 0)
+  function ffaSealed() {
+    const f = match.ffa;
+    match.phase = "sealed";
+    hudDirty = true;
+    const units = match.local.map((u) => ({ id: u.id, x: u.x, y: u.y, horizontal: !!u.horizontal }));
+    if (f.host) { f.seats[f.me].ready = true; ffaCheckReady(); }
+    else send({ t: "f-fleet", units });
+    say("Flota lista. Esperando a los demás…");
+  }
+  // anfitrión: llega la flota de un invitado (se valida con la regla libre; si no vale, va al azar)
+  async function ffaGotFleet(i, units) {
+    const f = match && match.ffa;
+    if (!f || !f.host) return;
+    const q = f.seats[i];
+    if (!q || q.ready) return;
+    let fleet = null;
+    if (Array.isArray(units) && units.length === C.FLEET.length) {
+      fleet = [];
+      let ok = true;
+      C.FLEET.forEach((spec, id) => {
+        const u = units.find((v) => v && v.id === id);
+        if (!u) { ok = false; return; }
+        const s = { id, size: spec.size, x: u.x | 0, y: u.y | 0, horizontal: !!u.horizontal, color: C.COLORS[id], lifted: false };
+        if (C.placeIssue(fleet, s.x, s.y, s.size, s.horizontal, null, "auto", null, opts.map, q.tile)) ok = false;
+        else fleet.push(C.settleKind(s, opts.map, q.tile));
+      });
+      if (!ok) fleet = null;
+    }
+    if (!fleet) fleet = C.placeRandom(null, Math.random, opts.map, q.tile);
+    q.side = C.newSide(fleet);
+    q.ready = true;
+    ffaCheckReady();
+  }
+  let ffaGraceT = 0;
+  function ffaCheckReady(force) {
+    const f = match && match.ffa;
+    if (!f || !f.host || battleStarted) return;
+    const me = f.seats[f.me];
+    if (!me.ready) return;
+    const missing = f.seats.filter((q) => !q.ready);
+    if (missing.length && !force) {
+      // el reloj de colocación ya llegó a 0 para todos: unos segundos de gracia y después al azar
+      if (clockLeft <= 0 && !ffaGraceT) ffaGraceT = setTimeout(() => { ffaGraceT = 0; ffaCheckReady(true); }, 6000);
+      return;
+    }
+    clearTimeout(ffaGraceT);
+    ffaGraceT = 0;
+    missing.forEach((q) => { q.side = C.newSide(C.placeRandom(null, Math.random, opts.map, q.tile)); q.ready = true; });
+    const msg = { t: "f-battle", order: f.order };
+    ffaBroadcast(msg);
+    lock(() => ffaOnBattle(msg));
+    lock(() => ffaAdvance(-1));
+  }
+  async function ffaOnBattle() {
+    const f = match.ffa;
+    if (battleStarted) return;
+    battleStarted = true;
+    match.stats.t0 = Date.now();
+    settleHand();
+    stopClock();
+    match.shared = C.newShared(opts.seed || 1, opts.terrain, opts.map, opts.sectors, "clasico");
+    match.phase = "defend";
+    f.view = f.me;
+    ffaFocus(firstFoe());
+    viewOverride = null;
+    say("¡A la guerra! Gana la última flota en pie.");
+    requestAnimationFrame(fit);
+    hudDirty = true;
+    paintStrip();
+  }
+  function firstFoe() {
+    const f = match.ffa;
+    const alive = f.seats.map((q, i) => i).filter((i) => i !== f.me && !f.seats[i].out);
+    if (f.target >= 0 && alive.includes(f.target)) return f.target;
+    return alive.length ? alive[0] : -1;
+  }
+  // el tablero que se ve: el de un rival (match.know/wrecks pasan a ser los de ese sector)
+  function ffaFocus(i) {
+    const f = match.ffa;
+    if (i < 0 || !f.seats[i]) return;
+    if (i === f.me) { f.view = f.me; hudDirty = true; paintStrip(); return; }
+    f.target = i;
+    f.view = i;
+    const q = f.seats[i];
+    match.know = q.know;
+    match.wrecks = q.wrecks;
+    remoteLeft = q.left;
+    preview = null;
+    hudDirty = true;
+    paintStrip();
+  }
+
+  // ---------- turnos (anfitrión) ----------
+  function nextAlive(from) {
+    const f = match.ffa;
+    const n = f.seats.length;
+    for (let k = 1; k <= n; k++) { const i = (from + k + n) % n; if (!f.seats[i].out) return i; }
+    return -1;
+  }
+  async function ffaAdvance(from) {
+    const f = match && match.ffa;
+    if (!f || !f.host || f.ended) return;
+    const alive = f.seats.filter((q) => !q.out);
+    if (alive.length <= 1) {
+      const msg = { t: "f-end", winner: f.seats.indexOf(alive[0]), ranks: f.seats.map((q) => q.rank || 1) };
+      ffaBroadcast(msg);
+      await ffaOnEnd(msg);
+      return;
+    }
+    const i = nextAlive(from);
+    f.n++;
+    const msg = { t: "f-turn", seat: i, n: f.n };
+    ffaBroadcast(msg);
+    await ffaOnTurn(msg);
+    clearTimeout(ffaTurnT);
+    const q = f.seats[i];
+    if (q.kind === "bot") ffaTurnT = setTimeout(() => ffaBotTurn(i), FFA_FAST ? 40 : 650 + Math.random() * 500);
+    else ffaTurnT = setTimeout(() => { if (f.turn === i && !f.ended) ffaBotTurn(i, true); }, FFA_TURN_S * 1000 + 600);
+  }
+  function ffaBotTurn(i, timeout) {
+    const f = match && match.ffa;
+    if (!f || f.ended || f.turn !== i) return;
+    const q = f.seats[i];
+    const foes = f.seats.map((t, k) => ({ k, left: t.left, know: t.know })).filter((t) => t.k !== i && !f.seats[t.k].out);
+    let tg = C.ffaPickTarget(foes, q.ai === "dificil" && !timeout, Math.random);
+    if (timeout && q.kind !== "bot" && f.seats[i].lastTarget != null && !f.seats[f.seats[i].lastTarget].out && f.seats[i].lastTarget !== i) tg = foes.find((t) => t.k === f.seats[i].lastTarget) || tg;
+    if (!tg) return;
+    const t = f.seats[tg.k];
+    const cell = C.ffaShot({ map: opts.map, myTile: q.tile, foeTile: t.tile, know: t.know, fleet: q.side.fleet, hard: q.ai === "dificil" && !timeout, fitCache: t.fit, turnNo: f.n }, Math.random);
+    if (!cell) return;
+    lock(() => ffaResolve(i, tg.k, cell, !!timeout));
+  }
+  async function ffaHostShot(i, msg) {
+    const f = match.ffa;
+    if (f.ended || f.turn !== i || msg.n !== f.n) return;
+    const tg = msg.target | 0;
+    if (!f.seats[tg] || tg === i || f.seats[tg].out) return;
+    const cell = { x: msg.x | 0, y: msg.y | 0 };
+    if (!C.inBounds(cell.x, cell.y) || f.seats[tg].know.marks.has(C.key(cell.x, cell.y))) return;
+    await ffaResolve(i, tg, cell, false);
+  }
+  async function ffaResolve(from, tg, cell, auto) {
+    const f = match.ffa;
+    if (f.ended || f.turn !== from || f.resolving) return;
+    f.resolving = true;
+    clearTimeout(ffaTurnT);
+    const q = f.seats[tg];
+    f.seats[from].lastTarget = tg;
+    const res = C.resolveVolley(q.side, [cell]);
+    const r = res.results[0];
+    const wire = { x: r.x, y: r.y, kind: r.kind === "sunk" || r.kind === "hit" ? r.kind : "miss", ship: r.ship, uid: r.uid, med: r.med, cells: r.cells, left: r.left, size: r.size };
+    let out = false;
+    if (res.lost && !q.out) { out = true; }
+    const msg = { t: "f-res", n: f.n, from, target: tg, r: wire, left: res.hp.left, out, place: out ? f.alive : 0, auto: !!auto };
+    ffaBroadcast(msg);
+    await ffaOnRes(msg);
+    f.resolving = false;
+    await WAIT(FFA_FAST ? 20 : 120);
+    await ffaAdvance(from);
+  }
+
+  // ---------- turnos (todos) ----------
+  async function ffaOnTurn(msg) {
+    const f = match.ffa;
+    if (f.ended) return;
+    const i = msg.seat | 0;
+    if (!f.seats[i]) return;
+    f.turn = i;
+    f.n = msg.n | 0;
+    const q = f.seats[i];
+    ffaTurnClock(q.kind !== "bot");
+    if (i === f.me) {
+      match.phase = "attack";
+      selReset("shoot");
+      ffaFocus(firstFoe());
+      say("Tu turno. Elegí a quién arriba y tocá una celda de su sector.");
+    } else {
+      match.phase = f.seats[f.me].out ? "defend" : "defend";
+      if (!f.seats[f.me].out && f.view !== f.me && !f.pinned) ffaFocus(f.me);
+      if (!FFA_FAST || q.kind !== "bot") say("Turno de " + q.flag + " " + q.name + ".");
+    }
+    hudDirty = true;
+    paintStrip();
+  }
+  function ffaTurnClock(on) {
+    clearInterval(ffaClockId);
+    ffaClockId = 0;
+    if (!on) { ui.clock.classList.add("hidden"); return; }
+    clockLeft = FFA_TURN_S;
+    ui.clock.textContent = String(clockLeft);
+    ui.clock.classList.remove("hidden", "urgent");
+    ffaClockId = setInterval(() => {
+      clockLeft = Math.max(0, clockLeft - 1);
+      ui.clock.textContent = String(clockLeft);
+      ui.clock.classList.toggle("urgent", clockLeft <= 10);
+      if (clockLeft <= 0) { clearInterval(ffaClockId); ffaClockId = 0; }
+    }, 1000);
+  }
+  // disparo propio: el anfitrión lo resuelve; el invitado se lo manda
+  async function ffaMyShot(cell) {
+    const f = match.ffa;
+    if (match.phase !== "attack" || f.turn !== f.me) return;
+    const tg = f.target;
+    if (tg < 0 || f.seats[tg].out) { say("Elegí un rival arriba."); return; }
+    if (f.seats[tg].know.marks.has(C.key(cell.x, cell.y))) { say("Ahí ya dispararon. Elegí otra celda."); return; }
+    match.phase = "resolving";
+    match.stats.turns++;
+    hudDirty = true;
+    if (f.host) { lock(() => ffaResolve(f.me, tg, cell, false)); return; }
+    send({ t: "f-shot", target: tg, x: cell.x, y: cell.y, n: f.n });
+    say("Disparo en camino…");
+  }
+  async function ffaOnRes(msg) {
+    const f = match.ffa;
+    const from = msg.from | 0, tg = msg.target | 0;
+    const shooter = f.seats[from], q = f.seats[tg];
+    if (!shooter || !q || !msg.r) return;
+    const r0 = msg.r;
+    const r = { x: r0.x | 0, y: r0.y | 0, kind: r0.kind === "sunk" ? "sunk" : r0.kind === "hit" ? "hit" : "miss", ship: String(r0.ship || "").slice(0, 30), uid: typeof r0.uid === "number" ? r0.uid : null, med: r0.med === "tanque" ? "tanque" : "barco", left: r0.left | 0, size: r0.size | 0 };
+    if (r.kind === "sunk") r.cells = (Array.isArray(r0.cells) ? r0.cells : []).slice(0, 5).map((c) => ({ x: c.x | 0, y: c.y | 0 }));
+    if (!C.inBounds(r.x, r.y)) return;
+    C.noteResults(q.know, [r], f.n);
+    q.left = typeof msg.left === "number" ? msg.left : q.left;
+    if (r.kind === "sunk" && !q.wrecks.some((w) => w.uid === r.uid)) q.wrecks.push({ name: r.ship, uid: r.uid, kind: r.med, cells: r.cells, t0: performance.now() });
+    if (f.target === tg) remoteLeft = q.left;
+    const who = shooter.flag + " " + shooter.name;
+    const vs = q.flag + " " + q.name;
+    if (tg === f.me) {
+      // a mí: el invitado lo aplica sobre su propia flota (el anfitrión ya lo hizo al resolver)
+      if (!f.host) C.resolveVolley(match.side, [{ x: r.x, y: r.y }]);
+      const keep = f.view;
+      if (!f.seats[f.me].out) {
+        await playResults([r], true, null);
+        if (r.kind !== "miss") say(who + ": " + narrate([r], true, null));
+        else say(who + " tiró a tu sector: agua.");
+      }
+      if (keep !== f.me && f.pinned) ffaFocus(keep);
+    } else if (from === f.me) {
+      ffaFocus(tg);
+      rememberRemote([r]);
+      await playResults([r], false, null);
+    } else {
+      // entre otros: se ve si estás mirando ese sector (o ya quedaste afuera y mirás la acción)
+      if (f.seats[f.me].out && !f.pinned) ffaFocus(tg);
+      if (f.view === tg) ffaFxThird(r);
+      const txt = who + " → " + vs + ": " + (r.kind === "sunk" ? "hundió " + (r.med === "tanque" ? "un " : "un ") + r.ship.toLowerCase() : r.kind === "hit" ? "¡tocado!" : "agua") + ".";
+      if (!FFA_FAST || r.kind === "sunk") say(txt);
+      await WAIT(FFA_FAST ? 10 : f.view === tg ? 650 : 260);
+    }
+    if (msg.out && !q.out) {
+      q.out = true;
+      q.rank = msg.place || f.alive;
+      f.alive = Math.max(1, f.alive - 1);
+      if (tg === f.me) {
+        showBanner("FLOTA HUNDIDA", "Quedaste afuera (puesto " + q.rank + "). Seguís mirando.", "bad");
+        match.phase = "defend";
+        say("Te hundieron toda la flota. Seguís mirando la batalla.");
+        ffaFocus(firstFoe());
+      } else {
+        showBanner(vs.toUpperCase() + " AFUERA", "Lo hundió " + who + ".", from === f.me ? "good" : "bad");
+        say(vs + " quedó afuera. Lo hundió " + who + ".");
+        if (f.target === tg) { const nf = firstFoe(); if (nf >= 0) ffaFocus(nf); }
+      }
+      await WAIT(FFA_FAST ? 30 : 900);
+    }
+    hudDirty = true;
+    paintStrip();
+  }
+  function ffaFxThird(r) {
+    const j = juke();
+    if (r.kind === "hit" || r.kind === "sunk") { fxHit(r.x, r.y, false); if (r.kind === "sunk") fxSunk(r, false); if (j) j.sfx.hit(); }
+    else { fxMiss(r.x, r.y); if (j) j.sfx.miss(); }
+  }
+  async function ffaOnEnd(msg) {
+    const f = match && match.ffa;
+    if (!f || f.ended) return;
+    f.ended = true;
+    clearTimeout(ffaTurnT);
+    clearInterval(ffaClockId);
+    ffaClockId = 0;
+    const w = msg.winner | 0;
+    if (Array.isArray(msg.ranks)) msg.ranks.forEach((rk, i) => { if (f.seats[i] && typeof rk === "number") f.seats[i].rank = rk; });
+    if (f.seats[w]) f.seats[w].rank = 1;
+    ffaFinish(w, typeof msg.why === "string" ? msg.why.slice(0, 120) : "");
+  }
+  function ffaFinish(w, why) {
+    const f = match.ffa;
+    const win = w === f.me;
+    match.phase = "end";
+    stopClock();
+    if (tuto) tutoEnd();
+    match.stats.t1 = Date.now();
+    renderEnd(win, win);
+    const wq = f.seats[w];
+    ui.endTitle.textContent = why || (win ? "¡Tu flota es la última en pie!" : wq ? "Ganó " + wq.flag + " " + wq.name + "." : "Fin de la batalla.");
+    document.getElementById("st-sunk").textContent = String(match.stats.sunk);
+    document.getElementById("recap").classList.add("hidden");
+    const rank = document.getElementById("ffa-rank");
+    rank.replaceChildren();
+    f.seats.map((q, i) => ({ q, i })).sort((a, b) => (a.q.rank || 99) - (b.q.rank || 99)).forEach(({ q, i }) => {
+      const li = document.createElement("li");
+      li.className = i === f.me ? "you" : "";
+      li.textContent = (q.rank ? q.rank + "º " : "") + q.flag + " " + q.name + (i === f.me ? " · vos" : "") + (q.left > 0 && q.rank !== 1 ? "" : "");
+      rank.appendChild(li);
+    });
+    rank.classList.remove("hidden");
+    document.getElementById("rematch").classList.add("hidden");
+    document.getElementById("end-kicker").textContent = win ? "VICTORIA" : "PUESTO " + (f.seats[f.me].rank || "—");
+    ui.end.classList.remove("hidden");
+    hudDirty = true;
+    say(ui.endTitle.textContent);
+    if (win) { const j = juke(); if (j) j.sfx.sunk(); }
+    window.__parquesEnd = Object.assign(window.__parquesEnd || {}, { ffa: true, winner: w, ranks: f.seats.map((q) => q.rank) });
+  }
+  // invitado: se cayó el anfitrión → la partida termina con aviso (nunca se queda colgada)
+  function ffaHostLost() {
+    const f = match && match.ffa;
+    if (!f || f.host || f.ended) return;
+    f.ended = true;
+    clearInterval(ffaClockId);
+    const alive = f.seats.map((q, i) => i).filter((i) => !f.seats[i].out);
+    ffaFinish(alive.includes(f.me) && alive.length === 1 ? f.me : -1, "Se cortó la conexión con el anfitrión. Batalla terminada.");
+  }
+
+  // ---------- franja de rivales ----------
+  const stripEl = document.getElementById("ffa-strip");
+  let stripOpen = false;
+  function piecesLeft(q, i) {
+    const f = match.ffa;
+    if (i === f.me) return match.local.filter((u) => !C.shipStatus(u, match.hitsOnLocal).sunk).length;
+    return C.FLEET.length - q.wrecks.length;
+  }
+  function paintStrip() {
+    if (!stripEl) return;
+    const f = match && match.ffa;
+    document.body.classList.toggle("ffa", !!f);
+    if (!f) { stripEl.classList.add("hidden"); return; }
+    const showIt = battleStarted || match.phase === "place" || match.phase === "sealed";
+    stripEl.classList.toggle("hidden", !showIt);
+    stripEl.classList.toggle("open", stripOpen);
+    if (stripOpen) paintGeo();
+    const row = document.getElementById("ffa-chips");
+    row.replaceChildren();
+    const order = [f.me].concat(f.seats.map((_, i) => i).filter((i) => i !== f.me));
+    order.forEach((i) => {
+      const q = f.seats[i];
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "fchip" + (i === f.view ? " on" : "") + (q.out ? " out" : "") + (i === f.turn && battleStarted ? " turn" : "") + (i === f.me ? " me" : "");
+      b.dataset.seat = String(i);
+      const n = piecesLeft(q, i);
+      const name = i === f.me ? "Vos" : q.name;
+      b.innerHTML = "";
+      const fl = document.createElement("span"); fl.className = "ff"; fl.textContent = q.flag; b.appendChild(fl);
+      const nm = document.createElement("span"); nm.className = "fn"; nm.textContent = name; b.appendChild(nm);
+      const ct = document.createElement("b"); ct.className = "fc"; ct.textContent = q.out ? "✕" : String(n); b.appendChild(ct);
+      b.title = name + " · " + (q.out ? "afuera" : n + " piezas") ;
+      b.setAttribute("aria-label", name + ", " + (q.out ? "afuera" : n + " piezas en pie"));
+      b.addEventListener("click", () => {
+        blip();
+        if (!battleStarted) return;
+        if (i === f.me) { f.pinned = false; ffaFocus(f.me); viewOverride = null; return; }
+        if (q.out && match.phase === "attack") { say(q.flag + " " + q.name + " ya quedó afuera."); }
+        f.pinned = match.phase !== "attack";
+        ffaFocus(i);
+        if (match.phase === "attack" && !q.out) say("Apuntás a " + q.flag + " " + q.name + ". Tocá una celda de su sector.");
+      });
+      row.appendChild(b);
+    });
+    const tl = document.getElementById("ffa-turn");
+    const tq = f.seats[f.turn];
+    tl.textContent = !battleStarted ? "Colocación" : f.ended ? "Fin" : f.turn === f.me ? "Tu turno" : tq ? "Turno " + tq.flag : "";
+    tl.classList.toggle("mine", battleStarted && f.turn === f.me && !f.ended);
+  }
+  document.getElementById("ffa-more").addEventListener("click", () => { stripOpen = !stripOpen; blip(); paintStrip(); });
+
+  document.getElementById("seat-add").addEventListener("click", () => {
+    if (!lobby || !lobby.host || lobby.seats.length >= lobbyMax()) return;
+    lobby.seats.push({ kind: "bot", ai: "normal" });
+    blip();
+    lobbyChanged();
+  });
+  document.getElementById("lobby-go").addEventListener("click", () => { blip(); ffaHostStart(); });
+  document.getElementById("lobby-back").addEventListener("click", () => {
+    blip();
+    if (lobby && !lobby.host) { try { send({ t: "f-bye" }); } catch (e) {} }
+    lobby = null;
+    lobbyEl.classList.add("hidden");
+    showMenu();
+  });
+  document.getElementById("lobby-copy").addEventListener("click", async () => {
+    const v = document.getElementById("lobby-url").value;
+    try { await navigator.clipboard.writeText(v); document.getElementById("lobby-note").textContent = "Enlace copiado."; } catch (e) { document.getElementById("lobby-url").select(); }
+  });
+
   window.__parquesInject = (msg) => onData(msg); // QA: simular un mensaje del rival
   window.__parquesState = () => match ? ({
     rules: match.shared ? match.shared.mode : opts.rules,
@@ -4024,6 +4924,23 @@
     lifted: !!hand,
     terrain: opts.terrain,
     crop: opts.crop,
+    board: myBoard(),
+    land: (() => { const o = []; for (let y = 0; y < C.H; y++) for (let x = 0; x < C.W; x++) if (C.isLand(null, opts.map, myBoard(), x, y)) o.push([x, y]); return o; })(),
+    sectors: gameSectors(),
+    // QA: ¿las flotas de la máquina respetan la regla libre? (toda la pieza en agua = barco, en tierra = tanque)
+    botsOk: (() => {
+      const good = (fl, k) => !fl || fl.every((u) => C.mediumOf(opts.map, k, C.cellsOf(u)) === u.kind && u.name === C.unitName(u.id, u.kind));
+      if (match.ffa) return match.ffa.host ? match.ffa.seats.every((q) => q.kind === "me" || !q.side || good(q.side.fleet, q.tile)) : null;
+      return match.remote ? good(match.remote, foeBoard()) : null;
+    })(),
+    foeKinds: match.remote ? match.remote.map((u) => u.kind) : match.ffa && match.ffa.host ? match.ffa.seats.flatMap((q) => (q.side && q.kind !== "me" ? q.side.fleet.map((u) => u.kind) : [])) : [],
+    lobby: lobby ? { host: lobby.host, me: lobby.me, url: lobby.url || "", seats: lobby.seats.map((q) => ({ kind: q.kind, ai: q.ai || "", on: q.kind !== "human" || !!q.conn || !!q.on })) } : null,
+    ffa: match && match.ffa ? {
+      me: match.ffa.me, turn: match.ffa.turn, view: match.ffa.view, alive: match.ffa.alive, ended: !!match.ffa.ended, host: !!match.ffa.host,
+      seats: match.ffa.seats.map((q) => ({ name: q.name, flag: q.flag, kind: q.kind, out: !!q.out, rank: q.rank || 0, sector: q.tile, left: q.left != null ? q.left : null, marks: q.know ? q.know.marks.size : 0 })),
+      chips: document.querySelectorAll('#ffa-chips .fchip').length, open: stripOpen,
+    } : null,
+    quit: !document.getElementById("quit").classList.contains("hidden"),
     map: opts.map,
     hp: hpOf(match.local, match.hitsOnLocal).left,
     turnNo: match.shared ? match.shared.turnNo : 0,
@@ -4049,7 +4966,7 @@
     stats: { ...match.stats },
     chron: (match.chron || []).length,
     tuto: tuto ? tuto.step : null
-  }) : { phase: "menu" };
+  }) : lobby ? { phase: "lobby", lobby: { host: lobby.host, me: lobby.me, url: lobby.url || "", seats: lobby.seats.map((q) => ({ kind: q.kind, ai: q.ai || "", on: q.kind !== "human" || !!q.conn || !!q.on })) } } : { phase: "menu" };
 
   const sala = new URLSearchParams(location.search).get("sala");
   if (sala) {
