@@ -15,13 +15,13 @@ export async function mk(browser, opts = {}) {
   return { ctx, page, log };
 }
 export const st = (p) => p.evaluate(() => window.__parquesState());
-export async function setup(p, { map='nahuel', terrain='agua', mode='pvc', nation='chile', rules='reloaded' } = {}) {
-  if (rules) await p.click(`#rules [data-rules=${rules}]`);
+// terreno y reglas ya no se eligen (cada mapa es real; Reloaded está oculto): se aceptan y se ignoran
+export async function setup(p, { map='nahuel', mode='pvc', nation='chile', rules=null } = {}) {
+  if (rules && await p.isVisible(`#rules [data-rules=${rules}]`)) await p.click(`#rules [data-rules=${rules}]`);
   await p.click(`#maps [data-map=${map}]`);
-  await p.click(`#terrains [data-terrain=${terrain}]`);
   await p.click(`#modes [data-mode=${mode}]`);
   const idx = ['chile','uk','usa','china','rusia','brasil'].indexOf(nation);
-  await p.click(`#nations .nation >> nth=${idx}`);
+  if (await p.isVisible('#nations')) await p.click(`#nations .nation >> nth=${idx}`);
 }
 export async function cellXY(p, x, y) {
   const r = await p.evaluate(() => { const c = document.getElementById('board').getBoundingClientRect(); return { l: c.left, t: c.top, w: c.width, h: c.height }; });

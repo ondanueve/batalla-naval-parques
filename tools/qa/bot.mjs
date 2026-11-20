@@ -1,7 +1,7 @@
 import { st, clickCell, wait, dlg, ended, waitAttack } from './lib.mjs';
 // Bot mixto: dispara (a veces repite celdas golpeadas), y de tanto en tanto maniobra por la UI.
 async function back(p) { await p.evaluate(() => { const c = document.getElementById('man-cancel'); const sh = document.getElementById('act-shoot'); if (c.offsetParent) c.click(); else if (sh.offsetParent) sh.click(); }); await wait(120); }
-async function fold(p, on) { const cur = await p.evaluate(() => document.body.classList.contains('hud-fold')); if (cur !== on) { await p.evaluate(() => document.getElementById('hud-fold').click()); await wait(80); } }
+async function fold(p, on) { if (!(await p.$('#hud-fold'))) return; const cur = await p.evaluate(() => document.body.classList.contains('hud-fold')); if (cur !== on) { await p.evaluate(() => document.getElementById('hud-fold').click()); await wait(80); } }
 export async function playGame(p, tag, o = {}) {
   const rnd = o.rnd || Math.random;
   const stats = { shots: 0, repeat: 0, mover: 0, vigilar: 0, reparar: 0, apuntar: 0, init: 0, blocked: 0, notes: [], levels: new Set() };
@@ -13,12 +13,12 @@ export async function playGame(p, tag, o = {}) {
     if (Date.now() - t0 > (o.maxMs || 240000)) { stats.notes.push('TIMEOUT'); break; }
     const s = await st(p);
     if (s.phase !== 'attack') { await wait(150); continue; }
-    if (++guard > 400) { stats.notes.push('GUARD'); break; }
+    if (++guard > 1000) { stats.notes.push('GUARD'); break; }
     stats.levels.add(s.level);
     if (lastHp != null && s.foeHp < lastHp) { /* hit happened on last shot */ }
     lastHp = s.foeHp;
     const r = rnd();
-    const devOff = await p.evaluate(() => document.getElementById('act-dev').disabled);
+    const devOff = await p.evaluate(() => { const e = document.getElementById('act-dev'); return !e || e.disabled || !e.offsetParent; }); // Clásico: no hay maniobras
     if (devOff) stats.devOff = (stats.devOff || 0) + 1;
     const maneuver = !o.shootOnly && !devOff && r < (o.pMan ?? 0.5) && s.level < 3;
     if (maneuver) {
@@ -61,11 +61,11 @@ export async function playGame(p, tag, o = {}) {
     let c;
     const fresh = (q) => q.x >= 0 && q.y >= 0 && q.x < 10 && q.y < 20 && !tried.has(q.x + ',' + q.y);
     const near = hitCells.flatMap((h) => [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, d]) => ({ x: h.x + a, y: h.y + d }))).filter(fresh);
-    if (hitCells.length && rnd() < 0.15) { c = hitCells[Math.floor(rnd() * hitCells.length)]; stats.repeat++; }
+    if (!o.shootOnly && hitCells.length && rnd() < 0.15) { c = hitCells[Math.floor(rnd() * hitCells.length)]; stats.repeat++; }
     else if (near.length) c = near[Math.floor(rnd() * near.length)];
-    else { let n = 0; do { c = { x: Math.floor(rnd() * 10), y: Math.floor(rnd() * 20) }; } while (n++ < 60 && (!fresh(c) || (c.x + c.y) % 2)); }
+    else { let n = 0; do { c = { x: Math.floor(rnd() * 10), y: Math.floor(rnd() * 20) }; } while (n++ < 60 && (!fresh(c) || (n < 40 && (c.x + c.y) % 2))); }
     tried.add(c.x + ',' + c.y);
-    if (tried.size > 120) tried.clear();
+    if (!o.shootOnly && tried.size > 120) tried.clear();
     const before = s.foeHp;
     await clickCell(p, c.x, c.y);
     stats.shots++;
